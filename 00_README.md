@@ -1,6 +1,8 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-21** · 상태 **설계 단계 (코드 0줄)**
+최종 갱신 **2026-09-21** · **현재 위치: M1 착수 전** (설계 완료 · 구현 코드 0줄)
+
+> 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 
 > NeedSlack 엣지 가속기가 선별한 데이터를 클라우드로 옮겨 저장·가공·재학습하는
 > **Edge-to-Cloud 경로**를 실제로 만들어, rev.9 하드웨어 실험의 산업적 전제가
@@ -86,7 +88,8 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `docs/build_artifact.py` | 위 문서들의 웹 렌더러 (`arch` / `brief`) | ✅ |
 | `schema/edge_contract.json` | 엣지 계약 스냅샷 (상수 13 · 유도값 7) | ✅ 생성됨 |
 | `schema/gen_edge_contract.py` | 위 파일의 생성기 | ✅ |
-| `infra/` `edge-agent/` `pipelines/` | — | 🔲 **비어 있음** |
+| `infra/` `edge-agent/` `pipelines/` | M1~M4 구현이 들어갈 자리 | 🔲 **비어 있음** |
+| `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
 
@@ -147,7 +150,6 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 1. **판정 레코드 스키마 확정** — 설계결정-0001 §4 의 `reclaim_mode` / `granule_k` 반영.
    `schema/verdict.proto` 신설.
-2. **git 초기화** — 아직 저장소가 아니다. `CLAUDE.md` 의 커밋 규칙이 성립하려면 필요하다.
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 

@@ -58,7 +58,9 @@ DERIVED = [
 
 
 def main():
-    root = (sys.argv[1] if len(sys.argv) > 1
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    check_only = "--check" in sys.argv
+    root = (args[0] if args
             else os.environ.get("REV9_PREPROC", DEFAULT_PREPROC))
     cfg_path = os.path.join(root, "config.py")
     if not os.path.exists(cfg_path):
@@ -115,6 +117,24 @@ def main():
         f"rev.9 §6-3 이 기각한 초안 상태다.")
     doc["_selfcheck"] = {
         "queue_vs_duty_hours": round(a, 6), "passed": True}
+
+    if check_only:
+        # 읽기 전용 정합성 점검. 파일을 쓰지 않는다.
+        if not os.path.exists(OUT):
+            sys.exit(f"FAIL  {os.path.basename(OUT)} 이 없다. --check 없이 생성하라.")
+        cur = json.load(io.open(OUT, encoding="utf-8"))
+        old_sha = cur.get("_source", {}).get("sha256_16")
+        print(f"config.py sha[:16]  기록 {old_sha}  현재 {src_sha}")
+        if old_sha != src_sha:
+            sys.exit("FAIL  rev.9/config.py 가 바뀌었다. "
+                     "`python gen_edge_contract.py` 로 재생성하라.")
+        drift = [k for k, v in doc["derived"].items()
+                 if abs(v["value"] - cur["derived"][k]["value"]) > 1e-9]
+        if drift:
+            sys.exit(f"FAIL  유도값 불일치: {', '.join(drift)}")
+        print(f"OK    상수 {len(doc['constants'])} · 유도값 {len(doc['derived'])} 일치")
+        print(f"OK    자기검증: 큐 용량 ↔ 듀티 상한 {a:.4f} h")
+        return
 
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(
         json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
