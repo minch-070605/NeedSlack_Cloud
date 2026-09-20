@@ -1,0 +1,134 @@
+{
+  "_schema": "needslack.edge_contract/1",
+  "_generated": "2026-09-21",
+  "_generator": "schema/gen_edge_contract.py",
+  "_source": {
+    "repo": "rev.9",
+    "file": "02_전처리/config.py",
+    "sha256_16": "9f8fa14b5c6bc6e4",
+    "derivation": "01_문서/갈래A_전환.md §6 (업링크 예산 폐쇄)"
+  },
+  "_warning": "손으로 고치지 말 것. rev.9 를 고치고 생성기를 다시 돌려라.",
+  "select_rate_inst": 0.1,
+  "select_rate_p3": 0.05,
+  "constants": {
+    "UPLINK_BPS": {
+      "value": 1000000,
+      "unit": "bit/s",
+      "note": "링크 명목 대역. 이 계약의 유일한 자유 파라미터"
+    },
+    "UPLINK_PAYLOAD_BYTES": {
+      "value": 144500,
+      "unit": "B",
+      "note": "업로드 1프레임 페이로드. nuScenes 1600x900 JPEG 실측"
+    },
+    "CAND_RATE_HZ": {
+      "value": 20.0,
+      "unit": "Hz",
+      "note": "실차 후보 스트림. 1000 / T_FRAME_MS 에서 유도"
+    },
+    "CAND_RATE_HZ_POOL": {
+      "value": 2.0,
+      "unit": "Hz",
+      "note": "축 2 실험이 실제로 돌아간 주파수 (nuScenes 키프레임)"
+    },
+    "UPLINK_DUTY_PERIOD_S": {
+      "value": 86400.0,
+      "unit": "s",
+      "note": "일주기 폐쇄의 주기. 튜닝값이 아니다"
+    },
+    "UPLINK_DROP_POLICY": {
+      "value": "drop",
+      "unit": "",
+      "note": "토큰 고갈 시 정책. 'drop' 이라야 지연이 유계다"
+    },
+    "UPLINK_LINK_UP_WHEN_PARKED": {
+      "value": true,
+      "unit": "",
+      "note": "★ 이 모델 전체가 걸려 있는 유일한 강한 가정"
+    },
+    "T_FRAME_MS": {
+      "value": 50.0,
+      "unit": "ms",
+      "note": "프레임 주기 = 판정 지연 상한"
+    },
+    "D_RT_MS": {
+      "value": 28.662,
+      "unit": "ms",
+      "note": "멀티캠 트레이스 p99 = 정적 예약의 WCET 근거"
+    },
+    "C_MAIN_MS": {
+      "value": 24.692,
+      "unit": "ms",
+      "note": "전경 평균 실행시간 (2대 운용점)"
+    },
+    "SCORE_TILE": {
+      "value": 128,
+      "unit": "px",
+      "note": "타일 한 변. PE 어레이 규격"
+    },
+    "SCORE_N_TILES": {
+      "value": 8,
+      "unit": "",
+      "note": "프레임당 타일 수"
+    },
+    "SPLIT_SEED": {
+      "value": 20260827,
+      "unit": "",
+      "note": "split 난수 시드. 데이터셋 재현성 앵커"
+    }
+  },
+  "derived": {
+    "uplink_demand_bps": {
+      "value": 2312000.0,
+      "unit": "bit/s",
+      "formula": "rate · f_cand · S · 8"
+    },
+    "uplink_sustainable_rate": {
+      "value": 0.04325259515570934,
+      "unit": "",
+      "formula": "링크가 지속 감당하는 선별률. SELECT_RATE 와 다른 양"
+    },
+    "uplink_max_drive_duty": {
+      "value": 0.4325259515570934,
+      "unit": "",
+      "formula": "delta_max. 큐가 발산하지 않는 주행 듀티 상한"
+    },
+    "uplink_queue_growth_bps": {
+      "value": 164000.0,
+      "unit": "B/s",
+      "formula": "주행 중 대역 결손"
+    },
+    "uplink_max_arrival_latency_s": {
+      "value": 49029.75778546713,
+      "unit": "s",
+      "formula": "L_max. 도착 지연 상한 = (1 − delta_max) · 24 h"
+    },
+    "uplink_queue_min_bytes": {
+      "value": 6128719723.183392,
+      "unit": "B",
+      "formula": "Q_min. ⑦ NVMe 요구 용량"
+    },
+    "uplink_drive_hours_until_full": {
+      "value": 10.380622837370243,
+      "unit": "h",
+      "formula": "Q_min 을 채우는 주행시간. delta_max × 24 와 일치해야 한다"
+    }
+  },
+  "enforced_bounds": {
+    "decision_latency_ms": {
+      "value": 50.0,
+      "mechanism_preemptive": "stage2_scorer.v frame_start 가 partial_bank/preempt_pend 리셋",
+      "mechanism_nonpreemptive": "slack_scheduler.v CHECK_S 승인 테스트 cost <= close_tick - elapsed",
+      "note": "★ 상한은 두 구현에서 같고 강제 기전이 다르다. ADR-0001 참조"
+    },
+    "arrival_latency_s": {
+      "value": 49029.75778546713,
+      "mechanism": "즉시 드롭 + 일주기 폐쇄"
+    }
+  },
+  "_selfcheck": {
+    "queue_vs_duty_hours": 10.380623,
+    "passed": true
+  }
+}

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 비밀값
+.env
+*.pem
+*.key
+certs/
+
+# 로컬 스택 볼륨 (docker-compose)
+data/
+minio/
+pgdata/
+dynamodb-local/
+
+# 재생 입력 · 대용량 산출물 (rev.9 에서 읽는다. 복사하지 않는다)
+*.bin
+*.npy
+*.pt
+*.parquet
+
+# 문서 렌더링 산출물 (build_artifact.py 가 생성)
+*.html
