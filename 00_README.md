@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 로컬 스택 기동 · 부트스트랩 완료(M1-1). 다음은 `replay.py`**
+최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 재생기 완료(M1-2·3). 다음은 `ingest/`**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 
@@ -91,19 +91,22 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `schema/verdict.py` | **S1 와이어 계약** — 판정 레코드·frame_uuid·상태기계·런 모델 | ✅ |
 | `schema/pg/001_init.sql` (+`.down`) | **S2** PostgreSQL 계보 5테이블 | ✅ |
 | `schema/ddb_table.json` | **S2** DynamoDB 테이블/GSI1 정의 | ✅ |
+| `schema/arm_signals.json` · `gen_arm_signals.py` | 팔별 가속기 산출 스냅샷(tiles_scored·tile_mask·value_score). rev.9 venv 로 생성, **두 팔 × 3시드 선별 재현을 자기검증** | ✅ |
 | `edge-agent/contract.py` | `edge_contract.json` 런타임 로더 | ✅ |
 | `edge-agent/npyread.py` | `.npy` 선별 배열 리더 (**stdlib만**. numpy 교차검증 통과) | ✅ |
 | `edge-agent/frames.py` | `frames.bin` 랜덤접근 리더 (stdlib만) | ✅ |
 | `edge-agent/uplink.py` | **토큰버킷·store&forward·즉시 드롭** — 계약 집행부 | ✅ |
+| `edge-agent/replay.py` · `armsignals.py` | **차량 시뮬레이터** — pool 전량 재생 → 판정·텔레메트리(MQTT) · 번들(S3). 두 팔 dry-run 완주 · 로컬 스택 스모크 통과 | ✅ |
+| `common/aws.py` | AWS 어댑터 — boto3·paho 는 여기서만 | ✅ |
 | `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스. 이미지 **태그@다이제스트 고정** | ✅ 4개 모두 healthy |
 | `infra/bootstrap/00_check.ps1` | 환경 점검 (WSL · Docker Desktop · 엔진). **UTF-8 BOM 필수** — §5 | ✅ 통과 |
 | `infra/bootstrap/01_create.py` | 버킷/테이블/스키마 생성. **2회 실행으로 멱등 확인** | ✅ 실행 |
-| `tests/` | **31건 전부 통과** (stdlib unittest). `.ps1` BOM 검사 포함 | ✅ |
+| `tests/` | **45건 전부 통과** (stdlib unittest). 재생기는 합성 입력 + MemorySink 로 스택 없이 | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
 | `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
 | `.venv/` · `.env` | 전용 파이썬 3.12.10 환경 · 로컬 환경값 (둘 다 커밋 안 됨) | ✅ |
-| `edge-agent/replay.py` · `ingest/` · `common/` · `pipelines/` | M1~M4 나머지 구현이 들어갈 자리 | 🔲 **아직 없음** |
+| `ingest/` · `pipelines/` | M1~M4 나머지 구현이 들어갈 자리 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
@@ -156,37 +159,62 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | 2 | **AWS 단가는 차수 추정** | 보고서 §4-2 의 절대액은 리전·약정·통신 계약에 따라 배수로 움직인다. 결론은 절대액이 아니라 **10배 비율**에 걸려 있다 |
 | 3 | **`rate = 0.10` 은 2 Hz 에서만 검증됨** | 축 2 실험은 nuScenes 키프레임(2 Hz) 풀이었다. 실차 20 Hz 는 후보 밀도가 10배 → **근중복**이 발생하며, 클라우드 중복 제거로 흡수하지만 **효과는 미측정** |
 | 4 | **품질 논거는 선점 입도 `k → ∞` 위** | Δ mAP +0.0241 은 `L_pre ≈ 0` 가정에서 측정됐다. 거친 입도에서는 부호가 뒤집힌다 — **설계결정-0001 §3-3** |
+| 5 | **`S` = 144,500 B 는 전체 프레임 평균이다** | 재생 **실측**: 전체 34,149 장 평균 149,047 B(계약 근거와 일치)인데, 가치 기반 선별분은 **STA_B 214,340 B · DYN_B 205,005 B (+42~48%)**. 선별기가 복잡한 장면 = 큰 JPEG 를 고른다. 업링크 수요 · `δ_max` · `L_max` 가 이 만큼 낙관적이다. 이번 런 규모에서는 큐 최대 388 MB ≪ `Q_min` 6.13 GB 라 드롭 0 · 도착 지연 최대 3,106 s ≪ 49,030 s. **계약 수정 여부는 결정 필요** |
+
+### 재생 실측 — 두 팔 dry-run (2026-09-22)
+
+| | STA_B | DYN_B |
+|---|---|---|
+| 후보 · 선별 · 수락 · 드롭 | 24,491 · 2,449 · 2,449 · 0 | 24,491 · 2,449 · 2,449 · 0 |
+| 판정 메시지 (1초 배치) | 633 | 732 |
+| 번들 (35프레임) · 용량 | 70 · 524.9 MB | 70 · 502.1 MB |
+| 큐 최대점유 | 387.9 MB | 349.5 MB |
+| 도착 지연 최대 (번들 PUT 기준) | 3,106 s | 2,801 s |
+| 모의시간 주행 + 주차 배출 | 1,224.5 + 3,100 s | 1,224.5 + 2,795 s |
+
+> **발견 — rev.9 `frames.bin` 의 `conf_q8`·`det_count` 가 interim 현재본과 다르다**
+> (pool 기준 불일치 conf_q8 24,274 · det_count 19,188 / 24,491. mean_p·kinematic_u8 은 0).
+> 판정에는 보드 레코드(frames.bin)를 싣는다. need_profile 이 `w_conf = 0` 이라 value_score 는
+> 불변(`gen_arm_signals.py` 가 검증)이고, 축 2 선별은 타일 YOLO 점수라 **대조와 무관**하다.
+> rev.9 는 동결이므로 고치지 않는다. 기록: `schema/arm_signals.json` `_findings`.
 
 ---
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — `edge-agent/replay.py` (M1-2)
+### 🔴 먼저 — `ingest/` (M1-4·5)
 
-재생 오케스트레이터. 구성요소는 전부 있다:
-`frames.py`(원형 신호) + `npyread.load_canonical_selection()`(선별) +
-`uplink.py`(큐) + `verdict.py`(레코드). 남은 것은 이들을 잇고 **싱크**(MQTT · MinIO)에
-내보내는 것. **pool 24,491 후보 전량을 흘린다** — 선별분만 흘리면 계약이 돌지 않는다
-(PRD 암묵지 3).
+수집기(MQTT 판정·텔레메트리 → DynamoDB 조건부 쓰기) + 조정기(S3 번들 이벤트 → 상태 전이).
+재생기가 내보내는 것은 `구현설계_MVP.md §2-4` 표가 전부다. 착수 전에 닫을 것 셋:
+
+1. **MinIO 버킷 알림을 MQTT 로 받을 수 있는지 확인** — 안 되면 웹훅용 HTTP 가 필요해져
+   의존성을 다시 물어야 한다(`구현설계_MVP.md §8`).
+2. **DynamoDB 런별 키가 옛 런 모델이다** — `ddb_table.json` 이 `RUN#{run_id}`(팔×시드)로
+   되어 있지만 재생은 팔당 1회라 적재 단위는 `vin`(= 팔)이다. 키를 `vin` 기준으로 고칠지 결정.
+   아직 테이블에 데이터가 없어 지금 바꾸는 비용이 가장 싸다(`CLAUDE.md §6` 키 스키마 변경).
+3. **번들 하나가 조정 단위다** — S3 이벤트 1건이 35 판정을 UPLOADED 로 옮긴다. 번들 키 → 판정
+   목록 조회 경로가 필요하다(판정의 `payload.key` 로 GSI 또는 번들 매니페스트).
 
 ### 🔵 그다음 — M1 마무리
 
-1. **`ingest/`** — MQTT 구독 → DynamoDB 조건부 쓰기 → S3 이벤트 조정.
-   **착수 전에 MinIO 버킷 알림을 MQTT 로 받을 수 있는지 먼저 확인한다** — 안 되면
-   웹훅용 HTTP 가 필요해져 의존성을 다시 물어야 한다(`구현설계_MVP.md §8`).
+1. `python run.py replay DYN_B` (실시간이면 약 67 분, `REPLAY_SPEED=12.5` 면 약 5.4 분) → 수집·조정 확인
 2. 1런 완주 확인 (**M1 완료**)
+
+> MinIO 에 스모크 번들 1개가 남아 있다 — `vin=sim-DYN_B/boot=854e1879-…/` (3.9 MB, 판정 25건분).
+> 수집기가 없던 때라 대응 판정이 DynamoDB 에 없다. 지울지는 사람이 정한다(`CLAUDE.md §6`).
 
 ```bash
 python run.py up          # 스택 기동 (healthy 까지 기다림)
 python run.py bootstrap   # 버킷·테이블·스키마 (멱등)
 python run.py test        # 단위 테스트
+python run.py replay DYN_B --dry-run   # 재생기 — 스택 없이 계약만 (약 5초)
 ```
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
 **범위는 무료로 구현 가능한 것으로 고정.** 단위는 함대 대수가 아니라 **런**이다 —
-1 런 = 한 팔 × 한 시드로 `pool` 24,491 후보 1회 통과 → 2,449 프레임 → 354 MB.
-**최소 실험 = 2 팔 × 3 시드 = 6 런** (S3 2.12 GB · 상시 무료 5 GB 의 42%).
+재생은 **팔당 1회**(선별이 시드 독립) — `pool` 24,491 후보 1회 통과 → 2,449 프레임 → 약 0.5 GB(실측).
+**최소 실험 = 재생 2회 + 학습 2 팔 × 3 시드 = 6 런** (S3 1.03 GB 실측 · 상시 무료 5 GB 의 21%).
 
 | M | 목표 | 산출물 | 비용 |
 |---|---|---|---|

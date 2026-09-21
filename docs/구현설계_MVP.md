@@ -96,10 +96,13 @@ M4  AWS 수직 절단면
 | `profile_sha` | str(16) | `need_profile.json` 해시 | 재현성 앵커 |
 | `payload` | obj \| null | 업링크 | `{bucket, key, offset, len, sha256}` |
 
-**MVP 의 기전 필드.** 재생하는 선별 배열은 `07_RTL`(선점·재개)에서 나왔으므로
-`reclaim_mode = preempt_resume` 이다. `granule_k` 는 **`null`** — 헤드라인이 `k → ∞`
-가정 위에 있어(설계결정-0001 §3-3) 정수로 적을 값이 없고, `null` 이 "입도 미지정"의
-정식 표현이다. 같은 가정에서 `l_pre_cyc = 0`. 정의는 `schema/verdict.py` 가 단일 소스다.
+**MVP 의 기전 필드.** 선별 배열은 rev.9 `y4_select_axis2.py` 의 파이썬 슬랙 모형이
+만들었다. 팔마다 기전이 다르다 — `DYN_B` 는 `preempt_resume`(창에서 `L_pre` 를 빼지 않는
+`k → ∞` 선점형의 이상화), `STA_B` 는 `static_reserve`(고정 창). `granule_k` 는 **`null`** —
+헤드라인이 `k → ∞` 가정 위에 있어(설계결정-0001 §3-3) 정수로 적을 값이 없고, `null` 이
+"입도 미지정"의 정식 표현이다. 같은 가정에서 `l_pre_cyc = 0`, `resume_cnt = 0`.
+`rtl_build` 는 비트스트림이 아니라 `y4sim-<y4 sha 8자>` 다. 값은 `schema/arm_signals.json`
+이, 필드 정의는 `schema/verdict.py` 가 단일 소스다.
 
 **배치 봉투** — 메시지 1건에 N개 판정을 담는다.
 
@@ -138,11 +141,22 @@ PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶
            → 16 B 헤더 + 34,149 × (12 B 레코드 + 128×128 픽셀)
 ```
 
-재생기는 **`pool` 후보 24,491건 전부를 `f_cand` 로 흘리고**, 선별 배열에 든 인덱스만
-`selected=true` 로 표시해 페이로드를 올린다.
+재생기(`edge-agent/replay.py`)는 **`pool` 후보 24,491건 전부를 `f_cand` 로 흘리고**,
+선별 배열에 든 프레임만 업링크 큐에 넣는다. 재생은 **팔당 1회**다(선별이 시드 독립).
 
 > ⚠️ **선별분만 재생하면 안 된다.** 그러면 토큰버킷·드롭 정책·도착 지연이 **한 번도
 > 실행되지 않는다.** 계약(§2 README)이 검증되는 지점이 정확히 거기다.
+
+| 항목 | 규약 |
+|---|---|
+| 팔별 신호 | `tiles_scored`·`tile_mask`·`value_score` 는 `schema/arm_signals.json` 에서 읽는다. rev.9 가 numpy 난수로 순위 정합한 C_main 에서만 나오므로, `schema/gen_arm_signals.py` 가 rev.9 venv 로 한 번 굳힌다(두 팔 × 3시드 선별 재현을 자기검증) |
+| 판정 평면 | **선별분만** 판정으로 발행. 모의 1초 배치(보고서 §1-2) |
+| 텔레메트리 | 5분 주기 집계 — 후보 수 · `value_score>>5` 분포 · 타일 수 분포 · 큐 점유. 주차 배출 끝에 `final=true` 1건. 형식은 `verdict.Telemetry` |
+| 드롭 보고 | 즉시 드롭된 선별 프레임은 판정을 내지 않고 텔레메트리 `dropped_frame_uuids` 로 알린다. 조정기가 DROPPED 를 기록한다. 판정의 `selected ⇒ payload` 불변식을 지킨다 |
+| 페이로드 | rev.9 `yolo_ds/images/all/<frame_id:05d>.jpg` **실물 JPEG**. 큐는 실제 바이트 수를 과금한다 |
+| 번들 | 35프레임(보고서 §1-2). 큐 투입 시점에 `key/offset/length/sha256` 이 정해져 판정에 실린다. 객체는 **마지막 프레임이 링크를 빠져나간 시각**에 PUT — 클라우드가 관측하는 도착 지연의 기준. 키 `vin={vin}/boot={boot_id}/session={NNNN}/bundle-{NNNNN}.bin` |
+| 시각 | 차량이 내보내는 시각(`t_frame_utc` · `sent_at` · 번들 메타 `t-put-utc`)은 전부 **모의 시각의 UTC 환산**이다. 가속 재생에서 클라우드 벽시계로 도착 지연을 재면 틀린다 |
+| 주차 | 주행이 끝나면 `UPLINK_LINK_UP_WHEN_PARKED` 가정 아래 큐가 빌 때까지 배출한다 |
 
 ---
 
@@ -263,13 +277,16 @@ needslack-cloud/
 ├ docs/
 ├ schema/
 │   ├ edge_contract.json  gen_edge_contract.py
+│   ├ arm_signals.json  gen_arm_signals.py   ← 팔별 가속기 산출 스냅샷 (rev.9 venv 로 생성)
 │   ├ verdict.py                  ← 판정 레코드 정의 + frame_uuid (단일 소스)
 │   ├ ddb_table.json              ← DynamoDB 테이블/GSI 정의
 │   └ pg/001_init.sql  001_init.down.sql
 ├ edge-agent/                     ← 차량 시뮬레이터
-│   ├ replay.py                   frames.bin + 선별 인덱스 재생
+│   ├ replay.py                   pool 전량 재생 → 판정·텔레메트리(MQTT) · 번들(S3)
 │   ├ uplink.py                   토큰버킷 · store&forward · 즉시 드롭
-│   └ contract.py                 edge_contract.json 로더
+│   ├ contract.py                 edge_contract.json 로더
+│   ├ armsignals.py               arm_signals.json 로더
+│   └ frames.py  npyread.py       rev.9 frames.bin · .npy 리더 (stdlib)
 ├ ingest/                         ← ★ 신설 디렉터리
 │   ├ collector.py                MQTT 구독 → DynamoDB
 │   └ reconciler.py               S3 이벤트(MinIO 버킷 알림 → MQTT) → 상태 전이
@@ -282,7 +299,7 @@ needslack-cloud/
 │   ├ docker-compose.yml
 │   ├ bootstrap/                  버킷·테이블·스키마 생성 (멱등)
 │   └ aws/                        M4. IoT 정책 · 역할별칭
-├ common/                         ← ★ 신설. AWS 어댑터 (§5-1)
+├ common/aws.py                   ← AWS 어댑터 (§5-1). boto3·paho 는 여기서만 부른다
 └ tests/                          ← ★ 신설
 ```
 
@@ -299,7 +316,7 @@ needslack-cloud/
 
 | # | 항목 | 결정 | 이유 |
 |---|---|---|---|
-| 1 | **와이어 포맷** | **JSON + `schema_version`** (protobuf 아님) | 보고서 §1-2 가 protobuf 를 고른 근거는 **10만대 건당 과금**이다. MVP 는 메시지 ~122 건이라 그 논거가 적용되지 않는다. 의존성 0 · 디버깅 쉬움 · 구버전 차량 없음. **필드 이름과 의미는 proto 와 1:1 로 정의**해 두고, 실제 IoT Core 를 쓰는 M4 에서 전환 |
+| 1 | **와이어 포맷** | **JSON + `schema_version`** (protobuf 아님) | 보고서 §1-2 가 protobuf 를 고른 근거는 **10만대 건당 과금**이다. MVP 는 2팔 판정 메시지 1,365 건(실측)이라 그 논거가 적용되지 않는다. 의존성 0 · 디버깅 쉬움 · 구버전 차량 없음. **필드 이름과 의미는 proto 와 1:1 로 정의**해 두고, 실제 IoT Core 를 쓰는 M4 에서 전환 |
 | 2 | **MQTT 클라이언트** | `paho-mqtt` | 사실상 표준. Mosquitto·IoT Core 양쪽 호환 |
 | 3 | **AWS SDK** | `boto3` | MinIO·DynamoDB Local 이 같은 API. `endpoint_url` 로 전환 |
 | 4 | **PostgreSQL 접근** | `psycopg[binary]` **(ORM 없음)** | 테이블 5개 · 조인 몇 개다. `[binary]` — Windows 에 libpq 가 없다 |
