@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-21** · **현재 위치: Phase 0 — S1·S2 완료, S4 환경 블록**
+최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 엣지 에이전트 3개 모듈 완료. WSL2 설치 대기**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 
@@ -88,13 +88,17 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `CLAUDE.md` | **작업 규칙.** 시작 전 읽을 문서 · 포지셔닝 · 수치 · 문서 · 의존성 · 커밋 · 경계 | ✅ |
 | `docs/설계결정-0001-엣지-회수기전-중립성.md` | 선점·재개 ↔ 비선점 승인제어가 클라우드 계약에 미치는 영향 | ✅ 채택 |
 | `docs/build_artifact.py` | 위 문서들의 웹 렌더러 (`arch` / `brief`) | ✅ |
-| `schema/verdict.py` | **S1 와이어 계약** — 판정 레코드·frame_uuid·상태기계·런 모델 (stdlib만) | ✅ 확정 |
-| `schema/pg/001_init.sql` (+`.down`) | **S2** PostgreSQL 계보 스키마 5테이블 | ✅ 확정 |
-| `schema/ddb_table.json` | **S2** DynamoDB 테이블/GSI1 정의 | ✅ 확정 |
-| `tests/test_verdict.py` | S1 계약 검사 20건 (stdlib unittest) | ✅ 통과 |
-| `.env.example` | 환경 의존값 예시 (계약값은 여기 두지 않는다) | ✅ |
-| `schema/edge_contract.json` | 엣지 계약 스냅샷 (상수 13 · 유도값 7) | ✅ 생성됨 |
-| `schema/gen_edge_contract.py` | 위 파일의 생성기 | ✅ |
+| `schema/verdict.py` | **S1 와이어 계약** — 판정 레코드·frame_uuid·상태기계·런 모델 | ✅ |
+| `schema/pg/001_init.sql` (+`.down`) | **S2** PostgreSQL 계보 5테이블 | ✅ |
+| `schema/ddb_table.json` | **S2** DynamoDB 테이블/GSI1 정의 | ✅ |
+| `edge-agent/contract.py` | `edge_contract.json` 런타임 로더 | ✅ |
+| `edge-agent/npyread.py` | `.npy` 선별 배열 리더 (**stdlib만**. numpy 교차검증 통과) | ✅ |
+| `edge-agent/frames.py` | `frames.bin` 랜덤접근 리더 (stdlib만) | ✅ |
+| `edge-agent/uplink.py` | **토큰버킷·store&forward·즉시 드롭** — 계약 집행부 | ✅ |
+| `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스 | ✅ 작성 · ⏸ 미실행 |
+| `infra/bootstrap/00_check.ps1` · `01_create.py` | 환경 점검 · 버킷/테이블/스키마 생성(멱등) | ✅ 작성 · ⏸ 미실행 |
+| `tests/` | **30건 전부 통과** (stdlib unittest) | ✅ |
+| `.env.example` | 환경 의존값 예시 | ✅ |
 | `infra/` `edge-agent/` `pipelines/` | M1~M4 구현이 들어갈 자리 | 🔲 **비어 있음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
@@ -153,19 +157,29 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 닫아야 할 것 — Phase 0 설계 틀
+### 🔴 먼저 — 사람이 해야 하는 일 (AI 가 할 수 없음)
 
-`docs/구현설계_MVP.md` 가 S1~S5 를 정의한다. **M1 코드를 쓰기 전에 닫는다.**
+```powershell
+# 1. PowerShell 을 "관리자 권한으로" 실행
+wsl --install
+# 2. 재부팅
+# 3. Docker Desktop 실행 → 좌하단 "Engine running" 초록불 확인
+# 4. 확인:
+powershell -File infra/bootstrap/00_check.ps1
+```
 
-| # | 항목 | 상태 |
-|---|---|---|
-| S1 | 와이어 계약 — 판정 레코드 · `frame_uuid` · 상태기계 | ✅ **확정** — `schema/verdict.py` · 검사 20건 통과 |
-| S2 | 저장 스키마 — DynamoDB 키/GSI · PG DDL | ✅ **확정** — `pg/001_init.sql`(+down) · `ddb_table.json` |
-| S3 | 런 모델 — `run_id` · `vin` 격리 | ✅ 확정 (§4) |
-| S4 | 로컬 스택 — compose · 부트스트랩 · 엔드포인트 추상화 | 🔴 **Docker 미설치로 블록** |
-| S5 | 검증 전략 — 수용 기준 7개 ↔ 검사 | ✅ 확정 (§6) |
+이 PC 는 Windows 11 **Home** 이라 Hyper-V 백엔드를 못 쓴다. **WSL2 가 유일한 경로**다.
+도커는 ``%LOCALAPPDATA%/Programs/DockerDesktop`` 에 **사용자 영역 설치**돼 있다 —
+CLI 는 정상이고 엔진만 못 뜬다.
 
-**🔴 환경 블로커 2건** (아래 §5) 이 M1 을 막고 있다. S1·S2 는 영향 없이 끝났다.
+### 🔵 그다음 — 스택이 뜨면 바로 이어갈 것
+
+1. `docker compose -f infra/docker-compose.yml up -d` → `python infra/bootstrap/01_create.py`
+2. **`edge-agent/replay.py`** — 재생 오케스트레이터. 구성요소는 전부 있다:
+   `frames.py`(원형 신호) + `npyread.load_canonical_selection()`(선별) +
+   `uplink.py`(큐) + `verdict.py`(레코드). 남은 것은 이들을 잇고 **싱크**에 내보내는 것.
+3. **`ingest/`** — MQTT 구독 → DynamoDB 조건부 쓰기 → S3 이벤트 조정
+4. 1런 완주 확인 (**M1 완료**)
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
