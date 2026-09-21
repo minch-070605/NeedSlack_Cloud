@@ -10,13 +10,14 @@
 # 내리기:  docker compose -f infra/docker-compose.yml down          (데이터 유지)
 #          docker compose -f infra/docker-compose.yml down -v       (데이터 삭제)
 #
+# ⚠️ 이미지는 전부 태그@다이제스트로 고정한다(CLAUDE.md §4 — 이미지도 의존성). 올릴 때는 승인받는다.
 # ⚠️ 볼륨은 named volume 을 쓴다. 바인드 마운트는 Windows 에서 권한·성능 문제가 잦다.
 
 name: needslack-cloud
 
 services:
   mosquitto:
-    image: eclipse-mosquitto:2
+    image: eclipse-mosquitto:2@sha256:38c0da4f2ef84284d47b3b3eeea1cb3bdeabe81ee10caf0cd5c5ff61ee3ea408   # 2.1.2
     container_name: ns-mosquitto
     ports: ["1883:1883"]
     volumes:
@@ -30,7 +31,9 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    # Docker Hub minio/minio 는 사라졌다(pull access denied). 공식 미러 quay.io 를 쓴다.
+    # 커뮤니티 이미지는 2025-09-07 이후 갱신이 없다 — 로컬 S3 대체재로만 쓰므로 무방.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: ns-minio
     command: server /data --console-address ":9001"
     ports:
@@ -48,7 +51,7 @@ services:
       retries: 5
 
   dynamodb-local:
-    image: amazon/dynamodb-local:latest
+    image: amazon/dynamodb-local:latest@sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab   # 2026-07-31 빌드
     container_name: ns-dynamodb
     # inMemory 를 쓰지 않는다 — 컨테이너를 내렸다 올려도 런 결과가 남아야 한다.
     command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/data"]
@@ -59,7 +62,7 @@ services:
       - dynamodb-data:/data
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     container_name: ns-postgres
     environment:
       POSTGRES_USER: needslack
