@@ -12,6 +12,8 @@
                                                              gen_arm_signals.py --check
     replay ARM [--dry-run] [--limit N] [--speed X]
                차량 시뮬레이터 — 한 팔의 pool 후보 전량 재생  edge-agent/replay.py
+    status [출력경로]
+               진행 현황 페이지를 산출물에서 굽는다          docs/build_status.py
 
 어느 파이썬으로 불러도 `.venv` 인터프리터로 다시 실행한다. 여기서 막는 함정
 (00_README.md §5 "Windows 함정"):
@@ -104,13 +106,17 @@ def cmd_replay(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "edge-agent", "replay.py"), *args])
 
 
+def cmd_status(*args: str) -> int:
+    return _run([sys.executable, os.path.join(ROOT, "docs", "build_status.py"), *args])
+
+
 COMMANDS = {
     "check": cmd_check, "up": cmd_up, "down": cmd_down,
     "bootstrap": cmd_bootstrap, "test": cmd_test, "contract": cmd_contract,
-    "replay": cmd_replay,
+    "replay": cmd_replay, "status": cmd_status,
 }
 #: 인자를 받는 명령
-TAKES_ARGS = {"replay"}
+TAKES_ARGS = {"replay", "status"}
 
 
 def main(argv: list[str]) -> int:
