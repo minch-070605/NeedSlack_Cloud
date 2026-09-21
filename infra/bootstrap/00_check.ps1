@@ -7,6 +7,7 @@
 #   tests/test_scripts.py 가 이것을 검사한다.
 # ⚠ -ExecutionPolicy Bypass 는 이 프로세스에만 적용된다. 시스템 정책은 바꾸지 않는다.
 $ErrorActionPreference = "Continue"
+[Console]::OutputEncoding = [Text.Encoding]::UTF8   # 파이프로 받을 때(run.py check) cp949 로 깨지지 않게
 $env:WSL_UTF8 = "1"   # wsl.exe 가 UTF-16 대신 UTF-8 로 출력하게 한다 (콘솔 깨짐 방지)
 $bin = "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin"
 if (Test-Path $bin) { $env:PATH = "$bin;$env:PATH" }
@@ -42,4 +43,4 @@ if ($LASTEXITCODE -ne 0 -or $info -notmatch '^\d+\.\d+(\.\d+)?$') {
   exit 1
 }
 Write-Host "OK    ServerVersion=$info"
-Write-Host "`n환경 점검 통과. 다음: docker compose -f infra/docker-compose.yml up -d"
+Write-Host "`n환경 점검 통과. 다음: python run.py up"
