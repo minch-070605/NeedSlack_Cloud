@@ -115,6 +115,7 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 |---|---|---|
 | 아키텍처 분석 보고서 | https://claude.ai/artifact/CccT619ASK9rxZz1hQubsD | `python docs/build_artifact.py arch` |
 | 백엔드 도메인 브리핑 | https://claude.ai/artifact/1o3cfRanM6XqocH9wHddts | `python docs/build_artifact.py brief` |
+| **진행 현황** (마일스톤 · 재생 실측 · 발견) | https://claude.ai/artifact/BmhfRsECuYyeSDFERS3GHr | `python run.py status` → `docs/_build/status.html` 재배포 |
 
 > 재빌드는 같은 파일 경로로 배포되므로 **URL이 유지**됩니다. 배포는 별도 단계입니다.
 
