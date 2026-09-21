@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 도커 엔진 가동 · `.venv` 신설. 의존성 승인 대기**
+최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 로컬 스택 기동 · 부트스트랩 완료(M1-1). 다음은 `replay.py`**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 
@@ -95,12 +95,14 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `edge-agent/npyread.py` | `.npy` 선별 배열 리더 (**stdlib만**. numpy 교차검증 통과) | ✅ |
 | `edge-agent/frames.py` | `frames.bin` 랜덤접근 리더 (stdlib만) | ✅ |
 | `edge-agent/uplink.py` | **토큰버킷·store&forward·즉시 드롭** — 계약 집행부 | ✅ |
-| `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스 | ✅ 작성 · ⏸ 미실행 |
+| `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스. 이미지 **태그@다이제스트 고정** | ✅ 4개 모두 healthy |
 | `infra/bootstrap/00_check.ps1` | 환경 점검 (WSL · Docker Desktop · 엔진). **UTF-8 BOM 필수** — §5 | ✅ 통과 |
-| `infra/bootstrap/01_create.py` | 버킷/테이블/스키마 생성(멱등). `boto3`·`psycopg` 필요 | ✅ 작성 · ⏸ 미실행 |
+| `infra/bootstrap/01_create.py` | 버킷/테이블/스키마 생성. **2회 실행으로 멱등 확인** | ✅ 실행 |
 | `tests/` | **31건 전부 통과** (stdlib unittest). `.ps1` BOM 검사 포함 | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
-| `.venv/` | 이 프로젝트 전용 파이썬 3.12.10 환경. **pip 외 패키지 없음** (커밋 안 됨) | ✅ 신설 |
+| `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` | ✅ |
+| `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
+| `.venv/` · `.env` | 전용 파이썬 3.12.10 환경 · 로컬 환경값 (둘 다 커밋 안 됨) | ✅ |
 | `edge-agent/replay.py` · `ingest/` · `common/` · `pipelines/` | M1~M4 나머지 구현이 들어갈 자리 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
@@ -159,20 +161,26 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — 의존성 승인 (`CLAUDE.md §4`)
+### 🔴 먼저 — `edge-agent/replay.py` (M1-2)
 
-`01_create.py` 부터 `boto3`·`psycopg` 가 필요하다. 후보와 추천 이유는
-**`구현설계_MVP.md §8`** 에 있다 — FastAPI·uvicorn·pydantic · paho-mqtt · boto3 ·
-psycopg · pytest. 승인된 것만 `.venv` 에 설치하고 `requirements.txt` 로 고정한다.
+재생 오케스트레이터. 구성요소는 전부 있다:
+`frames.py`(원형 신호) + `npyread.load_canonical_selection()`(선별) +
+`uplink.py`(큐) + `verdict.py`(레코드). 남은 것은 이들을 잇고 **싱크**(MQTT · MinIO)에
+내보내는 것. **pool 24,491 후보 전량을 흘린다** — 선별분만 흘리면 계약이 돌지 않는다
+(PRD 암묵지 3).
 
-### 🔵 그다음 — 스택 기동과 M1
+### 🔵 그다음 — M1 마무리
 
-1. `docker compose -f infra/docker-compose.yml up -d` → `.venv/Scripts/python infra/bootstrap/01_create.py`
-2. **`edge-agent/replay.py`** — 재생 오케스트레이터. 구성요소는 전부 있다:
-   `frames.py`(원형 신호) + `npyread.load_canonical_selection()`(선별) +
-   `uplink.py`(큐) + `verdict.py`(레코드). 남은 것은 이들을 잇고 **싱크**에 내보내는 것.
-3. **`ingest/`** — MQTT 구독 → DynamoDB 조건부 쓰기 → S3 이벤트 조정
-4. 1런 완주 확인 (**M1 완료**)
+1. **`ingest/`** — MQTT 구독 → DynamoDB 조건부 쓰기 → S3 이벤트 조정.
+   **착수 전에 MinIO 버킷 알림을 MQTT 로 받을 수 있는지 먼저 확인한다** — 안 되면
+   웹훅용 HTTP 가 필요해져 의존성을 다시 물어야 한다(`구현설계_MVP.md §8`).
+2. 1런 완주 확인 (**M1 완료**)
+
+```bash
+python run.py up          # 스택 기동 (healthy 까지 기다림)
+python run.py bootstrap   # 버킷·테이블·스키마 (멱등)
+python run.py test        # 단위 테스트
+```
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
@@ -182,7 +190,7 @@ psycopg · pytest. 승인된 것만 `.venv` 에 설치하고 `requirements.txt` 
 
 | M | 목표 | 산출물 | 비용 |
 |---|---|---|---|
-| **M1** | 한 팔이 로컬을 통과 | `edge-agent/` 시뮬레이터(`frames.bin` 재생) · `infra/docker-compose.yml` · FastAPI 수집기 · DynamoDB Local · MinIO | **$0** |
+| **M1** | 한 팔이 로컬을 통과 | `edge-agent/` 시뮬레이터(`frames.bin` 재생) · `infra/docker-compose.yml` · MQTT 수집기·조정기 · DynamoDB Local · MinIO | **$0** |
 | **M2** | 계보 + 스냅샷 | PostgreSQL 스키마(보고서 §2-5 DDL) · 데이터셋 동결 · 역추적 질의 | **$0** |
 | **M3** | ★ **두 팔 × 3시드 재현** | Colab 재학습(`rev.9/08_이관` 재사용) · 평가 · **Δ mAP 대조표** | **$0** |
 | **M4** | AWS 수직 절단면 1개 | IoT 정책(차량 격리) → Credential Provider → S3 접두사 스코핑. **판정 평면만** | 상시 무료 한도 내 |
@@ -214,12 +222,13 @@ SageMaker Pipelines · 실차 연동 · 함대 부하시험.
 |---|---|---|
 | Docker | Docker Desktop **사용자 영역 설치** (`%LOCALAPPDATA%/Programs/DockerDesktop`) · 엔진 29.8.0 | `00_check.ps1` |
 | WSL | WSL2 (기본 배포 `docker-desktop`). Windows 11 **Home** 이라 Hyper-V 백엔드가 없어 **WSL2 가 유일한 경로** | `wsl --status` |
-| 파이썬 | `.venv/` (3.12.10). **pip 외 아무것도 없다** — 의존성 승인 대기(§4) | `.venv/Scripts/python -m pip list` |
+| 파이썬 | `.venv/` (3.12.10) + `requirements.txt`. `run.py` 가 알아서 이 인터프리터로 다시 실행한다 | `.venv/Scripts/python -m pip list` |
+| 도커 이미지 | 4개 모두 태그@다이제스트 고정. MinIO 는 `quay.io` (Docker Hub 저장소 소멸) | `docker compose -f infra/docker-compose.yml ps` |
 
 **엔진은 Docker Desktop 이 실행 중일 때만 뜬다.** 재부팅 뒤 자동 시작되지 않으면
 `00_check.ps1` 이 "Docker Desktop 이 실행 중이 아니다" 로 실패한다 — 앱을 실행하고 1~2분 기다린다.
 
-### Windows 함정 — 모르면 반드시 밟는 것
+### 환경 함정 — 모르면 반드시 밟는 것
 
 | 증상 | 원인 | 대응 |
 |---|---|---|
@@ -227,6 +236,8 @@ SageMaker Pipelines · 실차 연동 · 함대 부하시험.
 | `.ps1` 이 `TerminatorExpectedAtEndOfString` 파싱 오류 | PowerShell 5.1 이 BOM 없는 파일을 cp949 로 읽어 한글이 깨지고 따옴표 짝이 어긋난다 | 한글이 든 `.ps1` 은 **UTF-8 BOM** 으로 저장. `tests/test_scripts.py` 가 검사 |
 | 파이썬 한글 출력이 `UnicodeEncodeError` | 콘솔이 cp949 | **`PYTHONUTF8=1`** — 선택이 아니다 |
 | `wsl` 출력이 깨짐 | `wsl.exe` 가 UTF-16 으로 출력 | `$env:WSL_UTF8=1` |
+| `minio/minio` pull 이 `pull access denied` | Docker Hub 저장소가 사라졌다 (로그인해도 같다) | `quay.io/minio/minio` — compose 에 반영됨 |
+| 파이프로 받은 `.ps1` 출력이 깨짐 | PowerShell 출력 인코딩이 cp949 | 스크립트에서 `[Console]::OutputEncoding` 을 UTF-8 로 |
 | `docker info` 가 오류 문구를 내고도 종료코드 0 | 엔진 기동 중 API 가 500 을 준다 | 종료코드만 믿지 말고 응답 형태까지 확인 (`00_check.ps1` 이 그렇게 한다) |
 
 **rev.9 는 `C:\Users\minch\needslack_venv` 를 쓴다** (numpy 2.5.3 · matplotlib · pillow ·
