@@ -90,11 +90,16 @@ M4  AWS 수직 절단면
 | `value_score` | i32 | 재생기 계산 | `value_score.py` 와 정수 일치 |
 | `tile_mask` `tiles_scored` | u8 ×2 | 재생기 | |
 | `reclaim_mode` | enum | 런 설정 | `preempt_resume` / `admission_nonpreempt` / `static_reserve` |
-| `granule_k` `l_pre_cyc` `resume_cnt` | u8/u32/u16 | 런 설정 | 설계결정-0001 §4 |
+| `granule_k` `l_pre_cyc` `resume_cnt` | u8 \| null / u32 / u16 | 런 설정 | 설계결정-0001 §4. MVP 는 `granule_k = null` · `l_pre_cyc = 0` — 아래 |
 | `rtl_build` | str | 런 설정 | 비트스트림 식별자 |
 | `selected` | bool | 선별 배열 | **이 프레임을 올리는가** |
 | `profile_sha` | str(16) | `need_profile.json` 해시 | 재현성 앵커 |
 | `payload` | obj \| null | 업링크 | `{bucket, key, offset, len, sha256}` |
+
+**MVP 의 기전 필드.** 재생하는 선별 배열은 `07_RTL`(선점·재개)에서 나왔으므로
+`reclaim_mode = preempt_resume` 이다. `granule_k` 는 **`null`** — 헤드라인이 `k → ∞`
+가정 위에 있어(설계결정-0001 §3-3) 정수로 적을 값이 없고, `null` 이 "입도 미지정"의
+정식 표현이다. 같은 가정에서 `l_pre_cyc = 0`. 정의는 `schema/verdict.py` 가 단일 소스다.
 
 **배치 봉투** — 메시지 1건에 N개 판정을 담는다.
 
@@ -195,11 +200,15 @@ vin    = sim-{ARM}-s{SEED}      런마다 별개의 "차량"
 
 | 서비스 | 이미지 | 포트 | 대체 대상 |
 |---|---|---|---|
-| `mosquitto` | `eclipse-mosquitto` | 1883 | AWS IoT Core |
-| `minio` | `minio/minio` | 9000 / 9001 | S3 |
+| `mosquitto` | `eclipse-mosquitto:2` | 1883 | AWS IoT Core |
+| `minio` | `quay.io/minio/minio` | 9000 / 9001 | S3 |
 | `dynamodb-local` | `amazon/dynamodb-local` | 8000 | DynamoDB |
-| `postgres` | `postgres` | 5432 | Aurora PostgreSQL |
-| `ingest` | 자체 빌드 | 8080 | Lambda / Fargate |
+| `postgres` | `postgres:16.15-alpine` | 5432 | Aurora PostgreSQL |
+| `ingest` | 자체 (파이썬 프로세스) | 없음 — MQTT 구독자 | Lambda |
+
+이미지는 전부 **태그@다이제스트로 고정**한다(`infra/docker-compose.yml`). 이미지도
+의존성이므로 올릴 때 승인받는다. MinIO 는 Docker Hub 저장소가 사라져 공식 미러
+`quay.io` 에서 받는다.
 
 **부트스트랩**(`infra/bootstrap/`)이 버킷·테이블·PG 스키마를 만든다. **멱등이어야 한다** —
 두 번 돌려도 같은 결과.
@@ -233,7 +242,7 @@ MQTT_HOST=localhost                         # M4 에서 IoT Core 엔드포인트
 
 | # | 수용 기준 | 검사 |
 |---|---|---|
-| 1 | 두 팔이 파이프라인 통과 | `make run-all` 이 6런 완주, 종료코드 0 |
+| 1 | 두 팔이 파이프라인 통과 | `python run.py run-all` 이 6런 완주, 종료코드 0 (명령은 M3 에서 추가) |
 | 2 | **Δ mAP 재현** | `compare.py` 가 Δ 와 부트스트랩 CI 출력 → 오프라인 **+0.0241 [+0.0115, +0.0369]** 와 대조 |
 | 3 | 파이프라인이 대조를 왜곡 안 함 | 6런의 학습 인자 해시가 **팔·시드를 빼고 전부 동일** |
 | 4 | 계보 보존 | 단일 SQL 조인이 `eval_result → model_run → dataset_version → dataset_frame → frame_uuid` 를 반환 |
@@ -250,6 +259,7 @@ MQTT_HOST=localhost                         # M4 에서 IoT Core 엔드포인트
 ```
 needslack-cloud/
 ├ CLAUDE.md  00_README.md
+├ run.py  requirements.txt       ← 단일 진입점(make 대신) · 승인된 의존성
 ├ docs/
 ├ schema/
 │   ├ edge_contract.json  gen_edge_contract.py
@@ -261,9 +271,8 @@ needslack-cloud/
 │   ├ uplink.py                   토큰버킷 · store&forward · 즉시 드롭
 │   └ contract.py                 edge_contract.json 로더
 ├ ingest/                         ← ★ 신설 디렉터리
-│   ├ app.py                      FastAPI
 │   ├ collector.py                MQTT 구독 → DynamoDB
-│   └ reconciler.py               S3 이벤트 → 상태 전이
+│   └ reconciler.py               S3 이벤트(MinIO 버킷 알림 → MQTT) → 상태 전이
 ├ pipelines/
 │   ├ snapshot.py                 DynamoDB → manifest.jsonl + PG
 │   ├ colab_train.ipynb           재학습 (rev.9/08_이관 재사용)
@@ -283,27 +292,25 @@ needslack-cloud/
 
 ---
 
-## 8. 🟡 착수 전 확인이 필요한 것 — 의존성
+## 8. 의존성 — 확정
 
-`CLAUDE.md §4` 에 따라 **새 의존성은 추가 전에 묻는다.** 추천과 이유를 붙인다.
+`CLAUDE.md §4` 에 따라 승인된 것만 쓴다. 파이썬 의존성은 `requirements.txt` 가 단일
+소스이고, 이 프로젝트 전용 `.venv` 에 설치한다(rev.9 venv 와 공유하지 않는다).
 
-| # | 결정 | 추천 | 이유 |
+| # | 항목 | 결정 | 이유 |
 |---|---|---|---|
 | 1 | **와이어 포맷** | **JSON + `schema_version`** (protobuf 아님) | 보고서 §1-2 가 protobuf 를 고른 근거는 **10만대 건당 과금**이다. MVP 는 메시지 ~122 건이라 그 논거가 적용되지 않는다. 의존성 0 · 디버깅 쉬움 · 구버전 차량 없음. **필드 이름과 의미는 proto 와 1:1 로 정의**해 두고, 실제 IoT Core 를 쓰는 M4 에서 전환 |
-| 2 | **웹 프레임워크** | **FastAPI** + `uvicorn` + `pydantic` | 브리핑 §1-1 의 근거 그대로 — pydantic 이 계약 검증기가 되고 OpenAPI 가 자동 생성됨 |
-| 3 | **MQTT 클라이언트** | `paho-mqtt` | 사실상 표준. Mosquitto·IoT Core 양쪽 호환 |
-| 4 | **AWS SDK** | `boto3` | MinIO·DynamoDB Local 이 같은 API. `endpoint_url` 로 전환 |
-| 5 | **PostgreSQL 접근** | `psycopg` **(ORM 없음)** | 테이블 5개 · 조인 몇 개다. SQLAlchemy 를 넣을 이유가 없고, 브리핑 §1-5 대로 ORM 은 어차피 PG 에만 닿는다 |
-| 6 | **테스트** | `pytest` | |
-| 7 | **분석 질의** | `duckdb` — **M2 에서 필요해지면** | MVP 는 DynamoDB 스캔으로 충분할 수 있다. 지금 넣지 않는다 |
+| 2 | **MQTT 클라이언트** | `paho-mqtt` | 사실상 표준. Mosquitto·IoT Core 양쪽 호환 |
+| 3 | **AWS SDK** | `boto3` | MinIO·DynamoDB Local 이 같은 API. `endpoint_url` 로 전환 |
+| 4 | **PostgreSQL 접근** | `psycopg[binary]` **(ORM 없음)** | 테이블 5개 · 조인 몇 개다. `[binary]` — Windows 에 libpq 가 없다 |
+| 5 | **테스트** | stdlib `unittest` (의존성 없음) | 테스트가 `.venv` 없이도 돌아야 계약 점검(`CLAUDE.md §0-2`)이 항상 가능하다 |
+| 6 | **진입점** | `run.py` (stdlib) | Windows 에 `make` 가 없다. `.venv` 재실행 · `.env` 로드 · `PYTHONUTF8=1` 을 한곳에서 처리 |
+
+**웹 프레임워크는 넣지 않는다.** 판정 레코드는 stdlib `dataclass`(`schema/verdict.py`)로
+정의돼 있고, M1 의 수집기·조정기는 둘 다 MQTT 구독자라 HTTP 가 쓰일 곳이 없다.
+MinIO 버킷 알림을 MQTT 로 받는 것은 **아직 이 스택에서 확인하지 않았다** — `ingest/`
+착수 때 먼저 확인한다. 받을 수 없으면 웹훅 수신용 HTTP 가 필요해지고, 그때 다시 묻는다.
+
+**나중에 필요해지면 묻는 것**: `duckdb`(M2 분석 질의 — DynamoDB 스캔으로 부족할 때).
 
 **로컬에 `torch`/`ultralytics` 를 설치하지 않는다.** 학습·평가는 Colab 에서만 돈다.
-
-### 열려 있는 질문 둘
-
-1. **`reclaim_mode` 값을 무엇으로 넣을 것인가.** 재생하는 선별 배열은 `07_RTL`
-   (선점·재개)에서 나왔으므로 `preempt_resume` 이 맞다. 다만 `granule_k` 는
-   헤드라인이 `k → ∞` 가정 위에 있어(설계결정-0001 §3-3) 정수로 적을 값이 없다.
-   → **제안: `granule_k = null` + `l_pre_cyc = 0`, 그리고 그 뜻을 스키마 주석에 명시.**
-2. **`make` 를 쓸 것인가.** Windows 환경이라 `Makefile` 대신 `run.ps1` / `run.sh` 두 벌이
-   필요할 수 있다. → **제안: Python 진입점 하나(`run.py`)로 통일.**
