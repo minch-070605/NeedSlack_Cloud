@@ -236,6 +236,60 @@ class VerdictBatch:
             schema_version=d.get("schema_version", SCHEMA_VERSION))
 
 
+# ─────────────────────────────────────────────────────────── 집계 텔레메트리
+@dataclass(slots=True)
+class Telemetry:
+    """판정 평면의 집계 메시지. **선별되지 않은 후보**의 정보는 판정이 아니라 이것으로 올린다
+    (보고서 §1-2 — 후보 전량의 판정을 올리면 메시지가 10배가 된다).
+
+    창(window) 단위 카운터는 직전 텔레메트리 이후의 증분이고, 누적값은 `_total` 로 적는다.
+    **드롭 보고도 여기 싣는다** — 즉시 드롭된 선별 프레임은 판정을 내지 않고
+    `dropped_frame_uuids` 로만 알린다. 조정기는 이것으로 DROPPED 를 기록한다.
+
+    시각은 전부 **차량 시계**(재생기의 모의 시각을 UTC 로 환산한 값)다. 가속 재생에서는
+    클라우드 벽시계가 모의 시각보다 느리게 흐르므로, 도착 지연은 벽시계가 아니라
+    이 시각들로 계산해야 한다.
+    """
+    vin: str
+    boot_id: str
+    drive_session: int
+    sent_at: str                                   # 차량 시계 ISO8601
+    phase: str                                     # "drive" | "park"
+    t_sim_s: float
+    window_s: float
+    # ── 창 증분
+    candidates: int
+    selected: int
+    accepted: int
+    dropped: int
+    dropped_frame_uuids: list[str] = field(default_factory=list)
+    #: 후보 전량의 value_score 분포. 버킷 = value_score >> 5 (보고서 §2-4 의 score_bucket)
+    value_bucket_hist: dict[str, int] = field(default_factory=dict)
+    #: 후보 전량의 채점 타일 수 분포. 키 "0".."4"
+    tiles_hist: dict[str, int] = field(default_factory=dict)
+    # ── 누적·순시
+    queue_bytes: int = 0
+    peak_queue_bytes: int = 0
+    candidates_total: int = 0
+    accepted_total: int = 0
+    dropped_total: int = 0
+    bundles_uploaded_total: int = 0
+    max_arrival_latency_s: float = 0.0
+    final: bool = False
+    schema_version: int = SCHEMA_VERSION
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def from_json(s: str) -> "Telemetry":
+        d = json.loads(s)
+        ver = d.get("schema_version", SCHEMA_VERSION)
+        if ver != SCHEMA_VERSION:
+            raise ValueError(f"schema_version {ver} 를 이 코드가 모른다 (아는 값 {SCHEMA_VERSION})")
+        return Telemetry(**d)
+
+
 # ─────────────────────────────────────────────────────────── MQTT 토픽
 def topic_verdict(vin: str) -> str:
     return f"ns/v1/{vin}/curation/verdict"
