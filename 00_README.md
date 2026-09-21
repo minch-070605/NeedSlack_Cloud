@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 엣지 에이전트 3개 모듈 완료. WSL2 설치 대기**
+최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 도커 엔진 가동 · `.venv` 신설. 의존성 승인 대기**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 
@@ -96,10 +96,12 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `edge-agent/frames.py` | `frames.bin` 랜덤접근 리더 (stdlib만) | ✅ |
 | `edge-agent/uplink.py` | **토큰버킷·store&forward·즉시 드롭** — 계약 집행부 | ✅ |
 | `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스 | ✅ 작성 · ⏸ 미실행 |
-| `infra/bootstrap/00_check.ps1` · `01_create.py` | 환경 점검 · 버킷/테이블/스키마 생성(멱등) | ✅ 작성 · ⏸ 미실행 |
-| `tests/` | **30건 전부 통과** (stdlib unittest) | ✅ |
+| `infra/bootstrap/00_check.ps1` | 환경 점검 (WSL · Docker Desktop · 엔진). **UTF-8 BOM 필수** — §5 | ✅ 통과 |
+| `infra/bootstrap/01_create.py` | 버킷/테이블/스키마 생성(멱등). `boto3`·`psycopg` 필요 | ✅ 작성 · ⏸ 미실행 |
+| `tests/` | **31건 전부 통과** (stdlib unittest). `.ps1` BOM 검사 포함 | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
-| `infra/` `edge-agent/` `pipelines/` | M1~M4 구현이 들어갈 자리 | 🔲 **비어 있음** |
+| `.venv/` | 이 프로젝트 전용 파이썬 3.12.10 환경. **pip 외 패키지 없음** (커밋 안 됨) | ✅ 신설 |
+| `edge-agent/replay.py` · `ingest/` · `common/` · `pipelines/` | M1~M4 나머지 구현이 들어갈 자리 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
@@ -157,24 +159,15 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — 사람이 해야 하는 일 (AI 가 할 수 없음)
+### 🔴 먼저 — 의존성 승인 (`CLAUDE.md §4`)
 
-```powershell
-# 1. PowerShell 을 "관리자 권한으로" 실행
-wsl --install
-# 2. 재부팅
-# 3. Docker Desktop 실행 → 좌하단 "Engine running" 초록불 확인
-# 4. 확인:
-powershell -File infra/bootstrap/00_check.ps1
-```
+`01_create.py` 부터 `boto3`·`psycopg` 가 필요하다. 후보와 추천 이유는
+**`구현설계_MVP.md §8`** 에 있다 — FastAPI·uvicorn·pydantic · paho-mqtt · boto3 ·
+psycopg · pytest. 승인된 것만 `.venv` 에 설치하고 `requirements.txt` 로 고정한다.
 
-이 PC 는 Windows 11 **Home** 이라 Hyper-V 백엔드를 못 쓴다. **WSL2 가 유일한 경로**다.
-도커는 `%LOCALAPPDATA%/Programs/DockerDesktop` 에 **사용자 영역 설치**돼 있다 —
-CLI 는 정상이고 엔진만 못 뜬다.
+### 🔵 그다음 — 스택 기동과 M1
 
-### 🔵 그다음 — 스택이 뜨면 바로 이어갈 것
-
-1. `docker compose -f infra/docker-compose.yml up -d` → `python infra/bootstrap/01_create.py`
+1. `docker compose -f infra/docker-compose.yml up -d` → `.venv/Scripts/python infra/bootstrap/01_create.py`
 2. **`edge-agent/replay.py`** — 재생 오케스트레이터. 구성요소는 전부 있다:
    `frames.py`(원형 신호) + `npyread.load_canonical_selection()`(선별) +
    `uplink.py`(큐) + `verdict.py`(레코드). 남은 것은 이들을 잇고 **싱크**에 내보내는 것.
@@ -215,26 +208,32 @@ SageMaker Pipelines · 실차 연동 · 함대 부하시험.
 
 ---
 
-## 5. 🔴 환경 블로커 — M1 착수를 막고 있는 것
+## 5. 환경 — 이 PC 에서 확인된 것
 
-| # | 블로커 | 영향 | 확인 방법 |
-|---|---|---|---|
-| 1 | **Docker 미설치** | `infra/docker-compose.yml` 을 띄울 수 없다 → M1-1 이후 전부 정지 | `docker --version` → command not found |
-| 2 | **파이썬 환경 비어 있음** | PATH 의 `Python312` 에 pip 외 아무것도 없다. `numpy` 조차 없어 선별 `.npy` 를 못 읽는다 | `python -m pip list` → pip 만 |
+| 항목 | 상태 | 확인 방법 |
+|---|---|---|
+| Docker | Docker Desktop **사용자 영역 설치** (`%LOCALAPPDATA%/Programs/DockerDesktop`) · 엔진 29.8.0 | `00_check.ps1` |
+| WSL | WSL2 (기본 배포 `docker-desktop`). Windows 11 **Home** 이라 Hyper-V 백엔드가 없어 **WSL2 가 유일한 경로** | `wsl --status` |
+| 파이썬 | `.venv/` (3.12.10). **pip 외 아무것도 없다** — 의존성 승인 대기(§4) | `.venv/Scripts/python -m pip list` |
+
+**엔진은 Docker Desktop 이 실행 중일 때만 뜬다.** 재부팅 뒤 자동 시작되지 않으면
+`00_check.ps1` 이 "Docker Desktop 이 실행 중이 아니다" 로 실패한다 — 앱을 실행하고 1~2분 기다린다.
+
+### Windows 함정 — 모르면 반드시 밟는 것
+
+| 증상 | 원인 | 대응 |
+|---|---|---|
+| `.ps1` 실행 시 `UnauthorizedAccess` | 실행 정책이 스크립트를 막는다 | `powershell -ExecutionPolicy Bypass -File …` (이 프로세스에만 적용, 시스템 정책 불변) |
+| `.ps1` 이 `TerminatorExpectedAtEndOfString` 파싱 오류 | PowerShell 5.1 이 BOM 없는 파일을 cp949 로 읽어 한글이 깨지고 따옴표 짝이 어긋난다 | 한글이 든 `.ps1` 은 **UTF-8 BOM** 으로 저장. `tests/test_scripts.py` 가 검사 |
+| 파이썬 한글 출력이 `UnicodeEncodeError` | 콘솔이 cp949 | **`PYTHONUTF8=1`** — 선택이 아니다 |
+| `wsl` 출력이 깨짐 | `wsl.exe` 가 UTF-16 으로 출력 | `$env:WSL_UTF8=1` |
+| `docker info` 가 오류 문구를 내고도 종료코드 0 | 엔진 기동 중 API 가 500 을 준다 | 종료코드만 믿지 말고 응답 형태까지 확인 (`00_check.ps1` 이 그렇게 한다) |
 
 **rev.9 는 `C:\Users\minch\needslack_venv` 를 쓴다** (numpy 2.5.3 · matplotlib · pillow ·
 openpyxl. torch/ultralytics 는 없다 — 학습은 Colab 에서 돌았다). `rev.9/ns.bat` 이
 이 venv 를 절대경로로 고정하고 `PYTHONUTF8=1` 을 함께 박아 둔다.
-
-> **`PYTHONUTF8=1` 은 선택이 아니다.** Windows 콘솔이 cp949 라 한글·em dash 출력이
-> `UnicodeEncodeError` 로 죽는다. 우리 런처도 같은 값을 박는다.
-
-### 결정이 필요한 것
-
-| 결정 | 선택지 | 추천 |
-|---|---|---|
-| 파이썬 환경 | (a) `needslack-cloud/.venv` 신설 (b) rev.9 venv 공유 | **(a)** — 의존성 수명주기를 rev.9 와 묶지 않는다 |
-| 로컬 스택 | (a) Docker Desktop 설치 (b) 도커리스 — MinIO·Mosquitto·PostgreSQL 바이너리 + DynamoDB Local(JRE) | **(a)** — (b) 는 설치 4건 + JRE 이고 재현이 어렵다 |
+이 프로젝트는 그 venv 를 **공유하지 않는다** — 의존성 수명주기를 rev.9 와 묶지 않기 위해
+`needslack-cloud/.venv` 를 따로 둔다.
 
 ### 확정된 입력 자산 (전부 존재 확인)
 
