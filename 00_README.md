@@ -169,7 +169,7 @@ powershell -File infra/bootstrap/00_check.ps1
 ```
 
 이 PC 는 Windows 11 **Home** 이라 Hyper-V 백엔드를 못 쓴다. **WSL2 가 유일한 경로**다.
-도커는 ``%LOCALAPPDATA%/Programs/DockerDesktop`` 에 **사용자 영역 설치**돼 있다 —
+도커는 `%LOCALAPPDATA%/Programs/DockerDesktop` 에 **사용자 영역 설치**돼 있다 —
 CLI 는 정상이고 엔진만 못 뜬다.
 
 ### 🔵 그다음 — 스택이 뜨면 바로 이어갈 것
