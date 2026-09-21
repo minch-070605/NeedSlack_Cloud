@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-21** · **현재 위치: Phase 0 (설계 틀) 진행 중** · 구현 코드 0줄
+최종 갱신 **2026-09-21** · **현재 위치: Phase 0 — S1·S2 완료, S4 환경 블록**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 
@@ -88,6 +88,11 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `CLAUDE.md` | **작업 규칙.** 시작 전 읽을 문서 · 포지셔닝 · 수치 · 문서 · 의존성 · 커밋 · 경계 | ✅ |
 | `docs/설계결정-0001-엣지-회수기전-중립성.md` | 선점·재개 ↔ 비선점 승인제어가 클라우드 계약에 미치는 영향 | ✅ 채택 |
 | `docs/build_artifact.py` | 위 문서들의 웹 렌더러 (`arch` / `brief`) | ✅ |
+| `schema/verdict.py` | **S1 와이어 계약** — 판정 레코드·frame_uuid·상태기계·런 모델 (stdlib만) | ✅ 확정 |
+| `schema/pg/001_init.sql` (+`.down`) | **S2** PostgreSQL 계보 스키마 5테이블 | ✅ 확정 |
+| `schema/ddb_table.json` | **S2** DynamoDB 테이블/GSI1 정의 | ✅ 확정 |
+| `tests/test_verdict.py` | S1 계약 검사 20건 (stdlib unittest) | ✅ 통과 |
+| `.env.example` | 환경 의존값 예시 (계약값은 여기 두지 않는다) | ✅ |
 | `schema/edge_contract.json` | 엣지 계약 스냅샷 (상수 13 · 유도값 7) | ✅ 생성됨 |
 | `schema/gen_edge_contract.py` | 위 파일의 생성기 | ✅ |
 | `infra/` `edge-agent/` `pipelines/` | M1~M4 구현이 들어갈 자리 | 🔲 **비어 있음** |
@@ -154,13 +159,13 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 | # | 항목 | 상태 |
 |---|---|---|
-| S1 | 와이어 계약 — 판정 레코드 · `frame_uuid` · 상태기계 | 🟡 초안 (§2). `schema/verdict.py` 미작성 |
-| S2 | 저장 스키마 — DynamoDB 키/GSI · PG DDL | 🟡 초안 (§3). `schema/pg/001_init.sql` 미작성 |
+| S1 | 와이어 계약 — 판정 레코드 · `frame_uuid` · 상태기계 | ✅ **확정** — `schema/verdict.py` · 검사 20건 통과 |
+| S2 | 저장 스키마 — DynamoDB 키/GSI · PG DDL | ✅ **확정** — `pg/001_init.sql`(+down) · `ddb_table.json` |
 | S3 | 런 모델 — `run_id` · `vin` 격리 | ✅ 확정 (§4) |
-| S4 | 로컬 스택 — compose · 부트스트랩 · 엔드포인트 추상화 | 🟡 초안 (§5) |
+| S4 | 로컬 스택 — compose · 부트스트랩 · 엔드포인트 추상화 | 🔴 **Docker 미설치로 블록** |
 | S5 | 검증 전략 — 수용 기준 7개 ↔ 검사 | ✅ 확정 (§6) |
 
-**🟡 착수 전 확인 필요**: 의존성 7건과 열린 질문 2건 — `구현설계_MVP.md` §8.
+**🔴 환경 블로커 2건** (아래 §5) 이 M1 을 막고 있다. S1·S2 는 영향 없이 끝났다.
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
@@ -193,3 +198,36 @@ SageMaker Pipelines · 실차 연동 · 함대 부하시험.
 
 > OTA 프로파일 배포 **경로는 만들되**(보고서 §3-4), 그 결과를 다시 선별에 되먹이지
 > 않는다. rev.9 와 동일하게 0단 모델은 고정이다.
+
+---
+
+## 5. 🔴 환경 블로커 — M1 착수를 막고 있는 것
+
+| # | 블로커 | 영향 | 확인 방법 |
+|---|---|---|---|
+| 1 | **Docker 미설치** | `infra/docker-compose.yml` 을 띄울 수 없다 → M1-1 이후 전부 정지 | `docker --version` → command not found |
+| 2 | **파이썬 환경 비어 있음** | PATH 의 `Python312` 에 pip 외 아무것도 없다. `numpy` 조차 없어 선별 `.npy` 를 못 읽는다 | `python -m pip list` → pip 만 |
+
+**rev.9 는 `C:\Users\minch\needslack_venv` 를 쓴다** (numpy 2.5.3 · matplotlib · pillow ·
+openpyxl. torch/ultralytics 는 없다 — 학습은 Colab 에서 돌았다). `rev.9/ns.bat` 이
+이 venv 를 절대경로로 고정하고 `PYTHONUTF8=1` 을 함께 박아 둔다.
+
+> **`PYTHONUTF8=1` 은 선택이 아니다.** Windows 콘솔이 cp949 라 한글·em dash 출력이
+> `UnicodeEncodeError` 로 죽는다. 우리 런처도 같은 값을 박는다.
+
+### 결정이 필요한 것
+
+| 결정 | 선택지 | 추천 |
+|---|---|---|
+| 파이썬 환경 | (a) `needslack-cloud/.venv` 신설 (b) rev.9 venv 공유 | **(a)** — 의존성 수명주기를 rev.9 와 묶지 않는다 |
+| 로컬 스택 | (a) Docker Desktop 설치 (b) 도커리스 — MinIO·Mosquitto·PostgreSQL 바이너리 + DynamoDB Local(JRE) | **(a)** — (b) 는 설치 4건 + JRE 이고 재현이 어렵다 |
+
+### 확정된 입력 자산 (전부 존재 확인)
+
+| 경로 | 크기 / 내용 |
+|---|---|
+| `rev.9/05_데이터셋/board/frames.bin` | 559,907,020 B = 16 + 34,149 × 16,396 ✅ |
+| `rev.9/05_데이터셋/board/ref_frame.bin` | 16,384 B (128×128) — **`value_score` 계산 가능** |
+| `rev.9/04_중앙AI/selections_axis2/` | 44 파일. `{STA_B,DYN_B}_mc_rate0.10_s{1,2,3}.npy` 포함 |
+| `rev.9/05_데이터셋/yolo_ds/` | `images` `labels` `lists` `manifest.json` — 학습 데이터 |
+| `rev.9/05_데이터셋/splits/` | `frame_index.csv` `scene_split.json` |

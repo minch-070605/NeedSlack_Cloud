@@ -1,0 +1,36 @@
+{
+  "_comment": "DynamoDB 테이블 정의 (S2). infra/bootstrap 이 이 파일을 읽어 생성한다. 멱등이어야 한다.",
+  "_scope": "MVP. 보고서 §2-4 의 GSI2(점수 버킷 마이닝)와 샤드 접미사를 만들지 않는다 — 선별이 이미 오프라인에서 끝나 있고, 런마다 파티션이 갈려 핫 파티션이 없다.",
+  "TableName": "ns-curation-index",
+  "BillingMode": "PAY_PER_REQUEST",
+  "AttributeDefinitions": [
+    { "AttributeName": "PK",     "AttributeType": "S" },
+    { "AttributeName": "SK",     "AttributeType": "S" },
+    { "AttributeName": "GSI1PK", "AttributeType": "S" },
+    { "AttributeName": "GSI1SK", "AttributeType": "S" }
+  ],
+  "KeySchema": [
+    { "AttributeName": "PK", "KeyType": "HASH" },
+    { "AttributeName": "SK", "KeyType": "RANGE" }
+  ],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "GSI1",
+      "KeySchema": [
+        { "AttributeName": "GSI1PK", "KeyType": "HASH" },
+        { "AttributeName": "GSI1SK", "KeyType": "RANGE" }
+      ],
+      "Projection": { "ProjectionType": "ALL" }
+    }
+  ],
+  "_access_patterns": {
+    "프레임 단건 조회":  { "PK": "FRAME#{frame_uuid}", "SK": "META" },
+    "런별 판정 시계열":  { "PK": "RUN#{run_id}",       "SK": "TS#{t_frame_utc}#{frame_id}" },
+    "런의 상태별 조회":  { "GSI1PK": "RUN#{run_id}#STATE#{state}", "GSI1SK": "{t_ingest_utc}" }
+  },
+  "_notes": [
+    "정렬키에 수치를 넣을 때는 고정 폭 제로패딩을 쓴다. DynamoDB 정렬은 사전식이라 '231' < '99' 가 참이 된다.",
+    "쓰기는 조건부(attribute_not_exists(PK))로 건다. 재전송은 확률이 아니라 확실성이다.",
+    "PENDING 은 정상 상태다. 오래 머무는 것으로 알람하지 않는다."
+  ]
+}
