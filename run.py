@@ -8,7 +8,10 @@
     down       로컬 스택 정지 (데이터 유지)                  docker compose down
     bootstrap  버킷·테이블·PG 스키마 생성 (멱등)             infra/bootstrap/01_create.py
     test       단위 테스트                                   unittest discover -s tests
-    contract   계약이 rev.9 와 맞는지 확인 (파일 안 씀)      gen_edge_contract.py --check
+    contract   계약·팔별 신호 스냅샷이 rev.9 와 맞는지 확인  gen_edge_contract.py --check
+                                                             gen_arm_signals.py --check
+    replay ARM [--dry-run] [--limit N] [--speed X]
+               차량 시뮬레이터 — 한 팔의 pool 후보 전량 재생  edge-agent/replay.py
 
 어느 파이썬으로 불러도 `.venv` 인터프리터로 다시 실행한다. 여기서 막는 함정
 (00_README.md §5 "Windows 함정"):
@@ -92,13 +95,22 @@ def cmd_test() -> int:
 
 
 def cmd_contract() -> int:
-    return _run([sys.executable, os.path.join(ROOT, "schema", "gen_edge_contract.py"), "--check"])
+    rc = _run([sys.executable, os.path.join(ROOT, "schema", "gen_edge_contract.py"), "--check"])
+    return rc or _run([sys.executable, os.path.join(ROOT, "schema", "gen_arm_signals.py"), "--check"])
+
+
+def cmd_replay(*args: str) -> int:
+    _need_env_file()
+    return _run([sys.executable, os.path.join(ROOT, "edge-agent", "replay.py"), *args])
 
 
 COMMANDS = {
     "check": cmd_check, "up": cmd_up, "down": cmd_down,
     "bootstrap": cmd_bootstrap, "test": cmd_test, "contract": cmd_contract,
+    "replay": cmd_replay,
 }
+#: 인자를 받는 명령
+TAKES_ARGS = {"replay"}
 
 
 def main(argv: list[str]) -> int:
@@ -113,10 +125,10 @@ def main(argv: list[str]) -> int:
     except (AttributeError, ValueError):
         pass
 
-    if len(argv) != 1 or argv[0] not in COMMANDS:
+    if not argv or argv[0] not in COMMANDS or (len(argv) > 1 and argv[0] not in TAKES_ARGS):
         print(__doc__)
         return 2
-    return COMMANDS[argv[0]]()
+    return COMMANDS[argv[0]](*argv[1:])
 
 
 if __name__ == "__main__":
