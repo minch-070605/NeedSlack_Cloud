@@ -16,7 +16,7 @@ import verdict as V  # noqa: E402
 
 def make(**kw):
     base = dict(
-        vin=V.vin_of("DYN_B", 1), boot_id="boot-abc", drive_session=412,
+        vin=V.vin_of("DYN_B"), boot_id="boot-abc", drive_session=412,
         frame_id=1048322, t_frame_mono_ms=30294811,
         t_frame_utc="2026-09-21T14:03:09.881Z",
         conf_q8=43, mean_p=96, kinematic_u8=211, det_count=2,
@@ -31,7 +31,12 @@ def make(**kw):
 class TestRunModel(unittest.TestCase):
     def test_run_id_and_vin(self):
         self.assertEqual(V.run_id("DYN_B", 1), "DYN_B-s1")
-        self.assertEqual(V.vin_of("STA_B", 3), "sim-STA_B-s3")
+        self.assertEqual(V.dataset_id("DYN_B"), "ds-DYN_B")
+
+    def test_vin_has_no_seed(self):
+        """선별이 시드 독립이므로 재생은 팔당 1회. vin 에 시드가 들어가면 안 된다."""
+        self.assertEqual(V.vin_of("STA_B"), "sim-STA_B")
+        self.assertEqual(len({V.vin_of(a) for a in V.ARMS}), 2)
 
     def test_rejects_unknown_arm_or_seed(self):
         with self.assertRaises(ValueError):
@@ -39,9 +44,10 @@ class TestRunModel(unittest.TestCase):
         with self.assertRaises(ValueError):
             V.run_id("DYN_B", 4)
 
-    def test_six_runs_are_distinct(self):
-        ids = {V.run_id(a, s) for a in V.ARMS for s in V.SEEDS}
-        self.assertEqual(len(ids), 6)
+    def test_six_training_runs_two_datasets(self):
+        """학습 6런 · 데이터셋 2개. 시드는 학습에만 작용한다."""
+        self.assertEqual(len({V.run_id(a, s) for a in V.ARMS for s in V.SEEDS}), 6)
+        self.assertEqual(len({V.dataset_id(a) for a in V.ARMS}), 2)
 
     def test_selection_filename_matches_rev9(self):
         self.assertEqual(V.selection_filename("STA_B", 3),

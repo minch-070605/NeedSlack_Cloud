@@ -33,7 +33,10 @@ SEEDS = (1, 2, 3)
 
 
 def run_id(arm: str, seed: int) -> str:
-    """런 식별자. 예: DYN_B-s1"""
+    """학습 런 식별자. 예: DYN_B-s1
+
+    시드는 **학습에만** 작용한다. 선별에는 작용하지 않는다 — 아래 vin_of 주석 참조.
+    """
     if arm not in ARMS:
         raise ValueError(f"알 수 없는 팔: {arm}. 가능: {ARMS}")
     if seed not in SEEDS:
@@ -41,13 +44,38 @@ def run_id(arm: str, seed: int) -> str:
     return f"{arm}-s{seed}"
 
 
-def vin_of(arm: str, seed: int) -> str:
-    """런을 차량으로 모델링한다. S3 접두사 격리와 IoT 정책변수 격리가 따라온다."""
-    return f"sim-{run_id(arm, seed)}"
+def vin_of(arm: str) -> str:
+    """팔 하나를 차량 하나로 모델링한다. **시드는 들어가지 않는다.**
+
+    ★ rev.9 실측: `g = 1.0` 이라 pool 프레임이 전부 채점되고, 따라서
+      `y4_select_axis2.select()` 의 무작위 채움 경로(`take < budget`)를 타지 않는다.
+      그 결과 **선별 배열이 시드와 무관하게 동일하다** — s1 == s2 == s3 (바이트 동일 확인).
+
+      선별 2종 (재생·업로드 2회)   ← vin 이 가르는 것
+      학습   6런 (팔 × 시드)        ← run_id 가 가르는 것
+
+      같은 데이터를 3번 올리는 것은 순수한 낭비이므로 재생은 팔당 1회만 한다.
+
+    ⚠️ `g < 1` 인 조건(레짐 A 등)으로 바꾸면 무작위 채움이 살아나 시드별로 선별이
+       갈린다. 그때는 이 모델이 깨진다 — `load_canonical_selection()` 이 그것을 잡는다.
+    """
+    if arm not in ARMS:
+        raise ValueError(f"알 수 없는 팔: {arm}. 가능: {ARMS}")
+    return f"sim-{arm}"
 
 
-def selection_filename(arm: str, seed: int, rate: float = 0.10) -> str:
-    """rev.9 선별 배열 파일명. 내용은 정렬된 int64 전역 프레임 인덱스 배열."""
+def dataset_id(arm: str) -> str:
+    """데이터셋 스냅샷 식별자. 팔당 하나."""
+    if arm not in ARMS:
+        raise ValueError(f"알 수 없는 팔: {arm}. 가능: {ARMS}")
+    return f"ds-{arm}"
+
+
+def selection_filename(arm: str, seed: int = 1, rate: float = 0.10) -> str:
+    """rev.9 선별 배열 파일명. 내용은 정렬된 int64 전역 프레임 인덱스 배열.
+
+    세 시드 파일의 내용이 동일하므로 s1 을 정본으로 쓴다(위 vin_of 주석).
+    """
     return f"{arm}_mc_rate{rate:.2f}_s{seed}.npy"
 
 

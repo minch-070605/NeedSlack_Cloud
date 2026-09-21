@@ -28,17 +28,17 @@ CREATE TABLE campaign (
 
 -- ─────────────────────────────────────────── 불변 데이터셋 스냅샷
 CREATE TABLE dataset_version (
-    ds_id           TEXT        PRIMARY KEY,
-    run_id          TEXT        NOT NULL,          -- {ARM}-s{SEED}
+    ds_id           TEXT        PRIMARY KEY,       -- ds-{ARM}
     arm             TEXT        NOT NULL CHECK (arm IN ('STA_B','DYN_B')),
-    seed            INTEGER     NOT NULL CHECK (seed IN (1,2,3)),
     campaign_id     TEXT        NOT NULL REFERENCES campaign(campaign_id),
     manifest_s3_uri TEXT        NOT NULL,
     n_frames        INTEGER     NOT NULL CHECK (n_frames > 0),
     split_seed      INTEGER     NOT NULL,          -- rev.9 config.SPLIT_SEED = 20260827
     frozen_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- 한 런은 정확히 하나의 스냅샷을 만든다. 재실행하면 새 ds_id 를 써야 한다.
-    UNIQUE (run_id)
+    -- ★ 데이터셋은 팔당 하나다. 시드는 선별이 아니라 학습에만 작용한다 —
+    --   rev.9 g=1.0 이라 선별 배열이 시드와 무관하게 동일하다(schema/verdict.py vin_of).
+    --   따라서 스냅샷 2개 · 학습 런 6개 가 된다.
+    UNIQUE (campaign_id, arm)
 );
 
 CREATE TABLE dataset_frame (
@@ -89,7 +89,7 @@ COMMIT;
 -- ─────────────────────────────────────────── 계보 역추적 (수용 기준 4)
 -- 이 질의가 조인 한 번에 돌아야 한다.
 --
---   SELECT e.run_id, e.value AS map50, dv.arm, dv.seed,
+--   SELECT e.run_id, e.value AS map50, dv.arm, m.seed,
 --          c.profile_sha, df.frame_uuid, df.frame_id
 --     FROM eval_result   e
 --     JOIN model_run     m  ON m.run_id  = e.run_id
