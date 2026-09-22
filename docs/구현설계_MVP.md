@@ -152,7 +152,7 @@ PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶
 | 팔별 신호 | `tiles_scored`·`tile_mask`·`value_score` 는 `schema/arm_signals.json` 에서 읽는다. rev.9 가 numpy 난수로 순위 정합한 C_main 에서만 나오므로, `schema/gen_arm_signals.py` 가 rev.9 venv 로 한 번 굳힌다(두 팔 × 3시드 선별 재현을 자기검증) |
 | 판정 평면 | **선별분만** 판정으로 발행. 모의 1초 배치(보고서 §1-2) |
 | 텔레메트리 | 5분 주기 집계 — 후보 수 · `value_score>>5` 분포 · 타일 수 분포 · 큐 점유. 주차 배출 끝에 `final=true` 1건. 형식은 `verdict.Telemetry` |
-| 드롭 보고 | 즉시 드롭된 선별 프레임은 판정을 내지 않고 텔레메트리 `dropped_frame_uuids` 로 알린다. 조정기가 DROPPED 를 기록한다. 판정의 `selected ⇒ payload` 불변식을 지킨다 |
+| 드롭 보고 | 즉시 드롭된 선별 프레임은 판정을 내지 않고 텔레메트리 `dropped_frame_uuids` 로 알린다. 수집기가 DROPPED 를 기록한다. 판정의 `selected ⇒ payload` 불변식을 지킨다 |
 | 페이로드 | rev.9 `yolo_ds/images/all/<frame_id:05d>.jpg` **실물 JPEG**. 큐는 실제 바이트 수를 과금한다 |
 | 번들 | 35프레임(보고서 §1-2). 큐 투입 시점에 `key/offset/length/sha256` 이 정해져 판정에 실린다. 객체는 **마지막 프레임이 링크를 빠져나간 시각**에 PUT — 클라우드가 관측하는 도착 지연의 기준. 키 `vin={vin}/boot={boot_id}/session={NNNN}/bundle-{NNNNN}.bin` |
 | 시각 | 차량이 내보내는 시각(`t_frame_utc` · `sent_at` · 번들 메타 `t-put-utc`)은 전부 **모의 시각의 UTC 환산**이다. 가속 재생에서 클라우드 벽시계로 도착 지연을 재면 틀린다 |
@@ -166,19 +166,31 @@ PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶
 
 | 용도 | 키 |
 |---|---|
-| 프레임 단건 | `PK = FRAME#{frame_uuid}` · `SK = META` |
-| 차량별 시계열 | `PK = VIN#{vin}` · `SK = TS#{t_frame_utc}#{frame_id}` |
+| 프레임 단건 | `PK = FRAME#{frame_uuid}` · `SK = META` — 판정 필드 전부 + `state` · `t_{state}_utc` |
 | 상태별 조회 | **GSI1** `GSI1PK = VIN#{vin}#STATE#{state}` · `GSI1SK = {t_ingest_utc}` |
-| 번들 → 판정 목록 | `PK = BUNDLE#{payload.key}` · `SK = FRAME#{frame_uuid}` — 수집기가 선별 판정마다 쓴다 |
-| 번들 도착 표시 | `PK = BUNDLE#{payload.key}` · `SK = ARRIVED` — 조정기가 S3 이벤트마다 쓴다 |
+| 번들 → 판정 목록 | `PK = BUNDLE#{payload.key}` · `SK = META` — `frame_uuids`(문자열 집합) · 도착 속성 |
+| 차량별 텔레메트리 | `PK = VIN#{vin}` · `SK = TEL#{sent_at}#{boot_id}` |
+
+키 문자열을 만드는 곳은 `ingest/store.py` 하나다. 수집기·조정기·스냅샷이 따로 만들지 않는다.
 
 **적재 단위는 `vin`(= 팔)이다.** 재생이 팔당 1회라 적재 시점에는 `run_id`(팔×시드)가
 존재하지 않는다. `run_id` 는 학습 단계의 식별자이고 PostgreSQL `model_run` 이 가진다.
 
 **조정 단위는 번들이다.** S3 이벤트 1건이 판정 35건을 UPLOADED 로 옮기므로, 번들 키에서
-판정을 찾는 경로가 `BUNDLE#` 아이템이다. 판정과 번들 중 어느 쪽이 먼저 와도 나중에 온 쪽이
-상대 행을 보고 전이한다(수용 기준 6 의 스큐 3경우). `BUNDLE#` 아이템은 `GSI1PK` 를 싣지
-않아 GSI1 에 들어가지 않는다. 와이어 형식(번들 본문·판정 필드)은 바뀌지 않는다.
+판정을 찾는 경로가 `BUNDLE#` 아이템이다. 번들당 **한 아이템**이다.
+
+| 누가 | 무엇을 | 갱신 후 아이템을 보고 |
+|---|---|---|
+| 수집기 (판정 메시지마다) | `frame_uuids` 에 ADD — 집합이라 재전송이 멱등 | 도착 속성이 있으면 자기 판정을 UPLOADED |
+| 조정기 (S3 이벤트마다) | 도착 속성을 `if_not_exists` 로 SET — 재전송이 첫 도착 시각을 덮지 않음 | `frame_uuids` 전부를 UPLOADED |
+
+두 쓰기가 **같은 아이템을 원자적으로** 갱신하고 갱신 후 전체를 받으므로, 어느 쪽이 먼저 와도
+나중에 온 쪽이 반드시 상대의 기록을 본다(수용 기준 6 의 스큐 3경우). 전이는 조건부
+(`state = PENDING`)라 양쪽이 같은 프레임을 옮기려 해도 한 번만 일어난다. `BUNDLE#` 아이템은
+`GSI1PK` 를 싣지 않아 GSI1 에 들어가지 않는다. 와이어 형식(번들 본문·판정 필드)은 바뀌지 않는다.
+
+**DROPPED 는 판정이 없는 프레임이다.** 즉시 드롭은 판정을 내지 않으므로, 수집기가 텔레메트리
+`dropped_frame_uuids` 로 `FRAME#` 아이템을 DROPPED 로 만든다.
 
 > **GSI2(점수 버킷 마이닝)는 MVP 에서 만들지 않는다.** 선별이 이미 오프라인에서
 > 끝나 있어 클라우드가 점수로 고를 일이 없다. 보고서 §2-4 의 GSI2 는 목표 아키텍처용이다.
@@ -297,8 +309,9 @@ needslack-cloud/
 │   ├ contract.py                 edge_contract.json 로더
 │   ├ armsignals.py               arm_signals.json 로더
 │   └ frames.py  npyread.py       rev.9 frames.bin · .npy 리더 (stdlib)
-├ ingest/                         ← ★ 신설 디렉터리
-│   ├ collector.py                MQTT 구독 → DynamoDB
+├ ingest/
+│   ├ store.py                    키 규약 · 상태 전이 (DynamoTable · MemoryTable)
+│   ├ collector.py                판정·텔레메트리 MQTT → DynamoDB
 │   └ reconciler.py               S3 이벤트(MinIO 버킷 알림 → MQTT) → 상태 전이
 ├ pipelines/
 │   ├ snapshot.py                 DynamoDB → manifest.jsonl + PG

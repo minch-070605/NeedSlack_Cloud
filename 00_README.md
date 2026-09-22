@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 재생기 완료(M1-2·3). 다음은 `ingest/`**
+최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 재생기·수집기 완료(M1-2·3·4). 다음은 조정기 `ingest/reconciler.py`**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 > 도커 스택은 세션 사이에 내려 둔다 — 이어서 스택이 필요하면 Docker Desktop 을 켜고 `python run.py up`.
@@ -99,15 +99,17 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `edge-agent/uplink.py` | **토큰버킷·store&forward·즉시 드롭** — 계약 집행부 | ✅ |
 | `edge-agent/replay.py` · `armsignals.py` | **차량 시뮬레이터** — pool 전량 재생 → 판정·텔레메트리(MQTT) · 번들(S3). 두 팔 dry-run 완주 · 로컬 스택 스모크 통과 | ✅ |
 | `common/aws.py` | AWS 어댑터 — boto3·paho 는 여기서만 | ✅ |
-| `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스. 이미지 **태그@다이제스트 고정**. MinIO 버킷 알림 → MQTT (`queue_dir` 보관) | ✅ 4개 모두 healthy |
+| `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스. 이미지 **태그@다이제스트 고정**. MinIO 버킷 알림 → MQTT (`queue_dir` 보관). 오프라인 세션 큐 100,000건 | ✅ 4개 모두 healthy |
 | `infra/bootstrap/00_check.ps1` | 환경 점검 (WSL · Docker Desktop · 엔진). **UTF-8 BOM 필수** — §5 | ✅ 통과 |
 | `infra/bootstrap/01_create.py` | 버킷·버킷 알림 규칙·테이블·스키마 생성. **2회 실행으로 멱등 확인** | ✅ 실행 |
-| `tests/` | **48건 전부 통과** (stdlib unittest). 재생기는 합성 입력 + MemorySink 로 스택 없이. compose ↔ `verdict.py` 토픽 일치 검사 포함 | ✅ |
+| `ingest/store.py` | **키 규약·상태 전이의 단일 구현.** `DynamoTable`(실제) · `MemoryTable`(테스트) 두 구현 위에 선다 | ✅ |
+| `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED. 영속 세션·수동 PUBACK. 라이브 점검 통과(아래) | ✅ |
+| `tests/` | **68건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 30 초) | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
-| `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` | ✅ |
+| `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` `replay` `collect` `status` `guide` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
 | `.venv/` · `.env` | 전용 파이썬 3.12.10 환경 · 로컬 환경값 (둘 다 커밋 안 됨) | ✅ |
-| `ingest/` · `pipelines/` | M1~M4 나머지 구현이 들어갈 자리 | 🔲 **아직 없음** |
+| `ingest/reconciler.py` · `pipelines/` | 조정기 · M2~M4 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
@@ -185,23 +187,34 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — `ingest/` (M1-4·5)
+### 🔴 먼저 — 조정기 `ingest/reconciler.py` (M1-5)
 
-수집기(MQTT 판정·텔레메트리 → DynamoDB 조건부 쓰기) + 조정기(S3 번들 이벤트 → 상태 전이).
-재생기가 내보내는 것은 `구현설계_MVP.md §2-4` 표가 전부다. 착수 조건은 전부 닫혔다:
+S3 번들 이벤트 → `BUNDLE#` 도착 기록 → PENDING → UPLOADED → 체크섬 → INDEXED(실패 시 QUARANTINED).
+키 규약·승격 규칙은 `ingest/store.py` 에 이미 있다(`bundle_mark_arrived` · `promote_uploaded`) —
+조정기는 그것을 부르고 체크섬만 새로 한다. 해야 할 것:
 
-| 조건 | 결론 | 근거 |
-|---|---|---|
-| S3 이벤트 수신 경로 | **MinIO `notify_mqtt` → Mosquitto.** HTTP 불필요. compose·부트스트랩에 반영 | PUT 1건 → 이벤트 1건, 브로커 정지 중 PUT 도 재전송 확인. 형태는 `구현설계_MVP.md §8` |
-| DynamoDB 적재 단위 | **`VIN#{vin}`** (팔 = 차량) | `schema/ddb_table.json` · `구현설계_MVP.md §3-1`. 속성 이름 불변이라 테이블 재생성 없음 |
-| 번들 → 판정 조회 | **`BUNDLE#{payload.key}` 아이템** (`FRAME#` 행 · `ARRIVED` 행) | 같은 곳. 와이어 형식 불변 |
+1. 구독 `verdict.TOPIC_S3_EVENTS` — **영속 세션 · 수동 PUBACK** (수집기와 같은 규약, `구현설계_MVP.md §8`)
+2. 이벤트 키는 **URL 디코딩**한다. 번들 메타(`vin` · `n-frames` · `t-put-utc`)를 도착 속성으로 싣는다
+3. UPLOADED → INDEXED: 판정의 `payload.offset/length` 로 Range GET → `sha256` 대조
+4. **버킷 목록 대조** — 기동할 때 버킷을 훑어 도착 기록이 없는 번들을 처리한다(이벤트 유실 보완)
+5. 도착 지연 = `t_put_utc − t_frame_utc` (**차량 시계끼리**. 벽시계로 재면 가속 재생에서 틀린다)
 
-순서: ① 수집기 ② 조정기(영속 세션 구독 + 버킷 목록 대조) ③ 수용 기준 5·6 테스트(멱등 · 스큐 3경우).
+수집기 라이브 점검(임시 테이블·버킷, DYN_B 앞 3,000 후보 · 12.5배속) — 두 경우 모두 재생 보고와 일치:
+
+| 경우 | 결과 |
+|---|---|
+| 수집기가 꺼진 채 재생 → 나중에 기동 | 판정 147 · 메시지 84 · 텔레메트리 1 · 번들 5 전부 적재 (세션이 보관) |
+| 재생 도중 수집기 강제 종료 → 재기동 | 누적 FRAME 294 = 147 × 2 · BUNDLE 10 · TEL 2. 유실·중복 아이템 0 |
 
 ### 🔵 그다음 — M1 마무리
 
-1. `python run.py replay DYN_B` (실시간이면 약 67 분, `REPLAY_SPEED=12.5` 면 약 5.4 분) → 수집·조정 확인
+1. 터미널 셋 — `python run.py collect` · 조정기 · `python run.py replay DYN_B`
+   (실시간이면 약 67 분, `REPLAY_SPEED=12.5` 면 약 5.4 분)
 2. DYN_B 재생 1회 완주 확인 — 판정 2,449건이 INDEXED (**M1 완료**)
+
+> DynamoDB Local 은 호출당 약 76 ms(실측 — PutItem 100건 7.6 s)라 수집기 처리량은 초당 약 13 호출이다.
+> DYN_B 1회는 판정 2,449 + 번들 갱신 약 730 ≈ 3,200 호출이라 12.5배속 재생(5.4 분)을 따라간다.
+> 밀려도 메시지는 브로커 세션에 쌓일 뿐 잃지 않는다.
 
 ```bash
 python run.py up          # 스택 기동 (healthy 까지 기다림)
@@ -264,6 +277,7 @@ SageMaker Pipelines · 실차 연동 · 함대 부하시험.
 | `.ps1` 이 `TerminatorExpectedAtEndOfString` 파싱 오류 | PowerShell 5.1 이 BOM 없는 파일을 cp949 로 읽어 한글이 깨지고 따옴표 짝이 어긋난다 | 한글이 든 `.ps1` 은 **UTF-8 BOM** 으로 저장. `tests/test_scripts.py` 가 검사 |
 | 파이썬 한글 출력이 `UnicodeEncodeError` | 콘솔이 cp949 | **`PYTHONUTF8=1`** — 선택이 아니다 |
 | `wsl` 출력이 깨짐 | `wsl.exe` 가 UTF-16 으로 출력 | `$env:WSL_UTF8=1` |
+| 수집기가 꺼진 동안 보낸 메시지가 1,000건에서 끊김 | Mosquitto `max_queued_messages` 기본 1,000 — 초과분을 **경고 없이** 버린다 | `mosquitto.conf` 에 100,000 으로 반영됨 |
 | `minio/minio` pull 이 `pull access denied` | Docker Hub 저장소가 사라졌다 (로그인해도 같다) | `quay.io/minio/minio` — compose 에 반영됨 |
 | 파이프로 받은 `.ps1` 출력이 깨짐 | PowerShell 출력 인코딩이 cp949 | 스크립트에서 `[Console]::OutputEncoding` 을 UTF-8 로 |
 | `docker info` 가 오류 문구를 내고도 종료코드 0 | 엔진 기동 중 API 가 500 을 준다 | 종료코드만 믿지 말고 응답 형태까지 확인 (`00_check.ps1` 이 그렇게 한다) |
