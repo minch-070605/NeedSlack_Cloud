@@ -105,7 +105,7 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `ingest/store.py` | **키 규약·상태 전이의 단일 구현.** `DynamoTable`(실제) · `MemoryTable`(테스트) 두 구현 위에 선다 | ✅ |
 | `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED | ✅ M1 완주 |
 | `ingest/subscriber.py` | 수집기·조정기 공통 구독 루프 — 영속 세션 · 수동 PUBACK · **처리는 작업 스레드**(§5 함정) | ✅ |
-| `tests/` | **103건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초). `test_lineage` 는 PostgreSQL 에서 롤백 트랜잭션으로 역추적 조인을 검사한다 | ✅ |
+| `tests/` | **110건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초). `test_lineage` 는 PostgreSQL 에서 롤백 트랜잭션으로 역추적 조인을 검사한다 | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
 | `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` `replay` `collect` `reconcile` `status` `guide` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
@@ -116,7 +116,8 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `data/snapshots/` | `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (+ `.sha256`) — 커밋하지 않는다. Drive 에 올릴 것 | ✅ 1.63 GB |
 | `docs/설계결정-0002-M3-학습데이터-이관.md` | Colab 은 MinIO 에 닿지 않는다 → tar 로 묶어 Drive 로. rev.9 축 2 학습 레시피 고정 | ✅ 채택 |
 | `pipelines/colab_train.ipynb` · `build_colab_nb.py` | **M3 노트북** — tar sha256 대조 → 6런 학습 → held-out 평가 → Δ · CI → `m3_eval.json`. rev.9 학습·평가 코드를 원문 그대로 싣는다. `python run.py notebook` 이 굽는다 | ✅ 실행 대기 |
-| `pipelines/compare.py` | M3 결과를 계보에 등록하고 오프라인과 대조 | 🔲 **아직 없음** |
+| `pipelines/compare.py` | **M3 대조** — `m3_eval.json` 검증(tar sha256 · 인자 해시 6런 동일 · held-out · rev.9 코드) → `model_run` · `eval_result` 등록 → 오프라인과 시드별·Δ·CI 대조 → `data/m3/compare.json`. 판정 없이 사실만 | ✅ 결과 대기 |
+| `docs/build_primer.py` | 마일스톤 입문 페이지(`python run.py primer m2|m3`) — 진행 현황 한 판을 읽는 데 필요한 개념만 | ✅ |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
@@ -129,7 +130,8 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | **도메인 입문** (MQTT · MinIO · 두 평면 · 핵심 개념) | https://claude.ai/artifact/MMcuW7w7tdUMronLtuQdnP | `python run.py guide` → `docs/_build/guide.html` 재배포 |
 
 > 진행 현황·도메인 입문은 **갱신할 때마다 별도 아티팩트로 올린다** — 같은 URL 에 덮어쓰지 않는다(지난 판을 나란히 볼 수 있게).
-> 위 두 링크는 M2 완료 시점 판이다. 판마다의 링크는 claude.ai 갤러리(`/artifacts`)에 제목으로 쌓인다. 배포는 별도 단계입니다.
+> 위 두 링크는 M2 완료 시점 판이다. 이후 판: 진행 현황 M3 노트북 준비 https://claude.ai/artifact/WBzdoS84TonnXcDNnistcF ·
+> 입문 M2 동결과 계보 https://claude.ai/artifact/Vts2wJszy5sg2kMsXRJNTs · 입문 M3 재학습과 판정 https://claude.ai/artifact/VoayadzQRBV7eVBBWPD7Hc. 판마다의 링크는 claude.ai 갤러리(`/artifacts`)에 제목으로 쌓인다. 배포는 별도 단계입니다.
 
 ---
 
@@ -235,8 +237,7 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
    - `data/snapshots/` 의 `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (합계 1.63 GB) + `pipelines/colab_train.ipynb`
    - 세션이 끊기면 다시 "모두 실행" — 끝난 런은 건너뛴다. 학습은 T4 에서 20 분 안팎(추정 — rev.9 ybase 실측에서 환산), 평가 몇 분
    - 끝나면 Drive `m3_results/m3_eval.json` 을 `data/m3/m3_eval.json` 으로 내려받는다
-2. **`pipelines/compare.py`** — `m3_eval.json` 을 검증(tar sha256 = 스냅샷 · 학습 인자 해시 6런 동일 · held-out 식별자)하고
-   `model_run` · `eval_result` 를 등록한 뒤 Δ mAP 와 CI 를 오프라인 `eval_axis2_mc.json` 과 대조한다.
+2. **`python run.py compare`** — 준비됐다. 결과 파일을 검증하고 계보에 등록한 뒤 오프라인 `eval_axis2_mc.json` 과 대조한다.
    CI 는 노트북이 rev.9 와 같은 절차로 계산한다 — 로컬 `.venv` 에 numpy 가 없어서다
 
 ```bash
