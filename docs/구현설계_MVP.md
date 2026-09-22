@@ -328,7 +328,7 @@ needslack-cloud/
 │   ├ subscriber.py               공통 구독 루프 (영속 세션 · 수동 PUBACK · 작업 스레드)
 │   └ reconciler.py               S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED
 ├ pipelines/
-│   ├ snapshot.py                 DynamoDB → manifest.jsonl + PG
+│   ├ snapshot.py                 INDEXED → 대조·추출 → tar · manifest · PG 계보 (설계결정-0002)
 │   ├ colab_train.ipynb           재학습 (rev.9/08_이관 재사용)
 │   ├ evaluate.py                 mAP + 부트스트랩 CI
 │   └ compare.py                  Δ 대조표

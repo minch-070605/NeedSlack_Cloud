@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M1 완료 · 두 팔 모두 운영 파이프라인 통과(각 2,449 판정 INDEXED). 다음은 M2 — 착수 전 결정 두 건**
+최종 갱신 **2026-09-22** · **현재 위치: M2 완료 — 두 팔 데이터셋 동결(rev.9 선별과 프레임·바이트 단위로 일치). 다음은 M3 Colab 학습**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 > 도커 스택은 세션 사이에 내려 둔다 — 이어서 스택이 필요하면 Docker Desktop 을 켜고 `python run.py up`.
@@ -105,14 +105,17 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `ingest/store.py` | **키 규약·상태 전이의 단일 구현.** `DynamoTable`(실제) · `MemoryTable`(테스트) 두 구현 위에 선다 | ✅ |
 | `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED | ✅ M1 완주 |
 | `ingest/subscriber.py` | 수집기·조정기 공통 구독 루프 — 영속 세션 · 수동 PUBACK · **처리는 작업 스레드**(§5 함정) | ✅ |
-| `tests/` | **84건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초) | ✅ |
+| `tests/` | **103건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초). `test_lineage` 는 PostgreSQL 에서 롤백 트랜잭션으로 역추적 조인을 검사한다 | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
 | `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` `replay` `collect` `reconcile` `status` `guide` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
 | `.venv/` · `.env` | 전용 파이썬 3.12.10 환경 · 로컬 환경값 (둘 다 커밋 안 됨) | ✅ |
 | `ingest/reconciler.py` | **조정기** — S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED / QUARANTINED | ✅ M1 완주 |
-| 운영 테이블·버킷 | `ns-curation-index` · `ns-raw-payload` 에 **두 팔 각 1회분**(판정 2,449 · 번들 70씩, 502.1 + 524.9 MB). 점검 잔여물 631 아이템이 섞여 있다(§4 🟡 1) | ✅ 두 팔 |
-| `pipelines/` | M2~M4 | 🔲 **아직 없음** |
+| 운영 테이블·버킷 | `ns-curation-index` · `ns-raw-payload` 에 **두 팔 각 1회분**(판정 2,449 · 번들 70씩, 502.1 + 524.9 MB). 판정은 전부 `IN_DATASET` | ✅ 두 팔 |
+| `pipelines/snapshot.py` | **M2 스냅샷** — rev.9 선별·학습 목록 대조 → 번들에서 이미지 추출(sha256·원본 대조) → 결정적 tar · manifest · PG 계보 → `IN_DATASET`. 형식은 **설계결정-0002** | ✅ 두 팔 동결 |
+| `data/snapshots/` | `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (+ `.sha256`) — 커밋하지 않는다. Drive 에 올릴 것 | ✅ 1.63 GB |
+| `docs/설계결정-0002-M3-학습데이터-이관.md` | Colab 은 MinIO 에 닿지 않는다 → tar 로 묶어 Drive 로. rev.9 축 2 학습 레시피 고정 | ✅ 채택 |
+| `pipelines/` 나머지 | M3 — Colab 노트북 · 평가 · 대조표 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
@@ -198,6 +201,22 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 > STA_B 런에서는 수집기 적체(아래 🟡 1 의 잔여 메시지 347 건) 때문에 번들이 판정보다 먼저 도착해,
 > 판정 2,449 건 전부가 **"번들 먼저" 경로**(수집기가 UPLOADED 로 옮기고 스윕이 검증)로 INDEXED 에 닿았다 — 수용 기준 6 의 한 경우가 운영에서 실제로 돌았다.
 
+### 스냅샷 실측 — M2 (2026-09-22)
+
+`python run.py snapshot common|STA_B|DYN_B`. 멈춤 조건(설계결정-0002 §4 · `pipelines/snapshot.py` 머리말)을 전부 통과했다.
+
+| | STA_B | DYN_B | eval-common |
+|---|---|---|---|
+| 프레임 | 2,449 = rev.9 정본 선별 = rev.9 학습 목록 | 2,449 = 같음 | val 800 · held-out 2,826 |
+| held-out 과 겹침 | 0 | 0 | — |
+| 번들에서 자른 바이트 | 2,449 장 전부 sha256 · rev.9 원본과 일치 | 같음 | (rev.9 원본) |
+| 기전 · 프로파일 | `static_reserve` · `db9ee30e4b9fd7bd` | `preempt_resume` · 같음 | — |
+| tar | 530.6 MB · `e5976308ad26…` | 507.7 MB · `29000414531…` | 590.3 MB · `d20cf6fdde16…` |
+
+- 두 팔이 함께 고른 프레임은 **2,043** 장이다 — 서로 다른 것은 406 장(16.6%)뿐이고, 대조는 이 차이에서 나온다.
+- 다시 돌려도 sha256 이 같고 계보는 `same`(동결 확인). 전체 sha256 은 `data/snapshots/*.sha256` 과 MinIO
+  `ns-datasets/datasets/ds-{ARM}/snapshot.json`.
+
 > **발견 — rev.9 `frames.bin` 의 `conf_q8`·`det_count` 가 interim 현재본과 다르다**
 > (pool 기준 불일치 conf_q8 24,274 · det_count 19,188 / 24,491. mean_p·kinematic_u8 은 0).
 > 판정에는 보드 레코드(frames.bin)를 싣는다. need_profile 이 `w_conf = 0` 이라 value_score 는
@@ -208,36 +227,25 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — M2 착수 전에 닫을 것
+### 🔴 먼저 — M3 Colab 학습 (결론)
 
-1. **점검 잔여물 631 아이템을 운영 테이블에서 지울지** — 아래 🟡 1. 지워야 DYN_B "대기 0" 판정이 다시 선다
-2. **Colab 이관 방식** — 아래 🟡 2. M2 스냅샷의 출력 형식이 이 결정에 달려 있다
+1. **노트북 `pipelines/colab_train.ipynb`** — `rev.9/08_이관/build_colab_nb.py` 를 본떠 생성기로 만든다. Drive 의 tar 3개 → sha256 대조
+   (다르면 멈춤) → 풀기 → `ybase` 에서 fine-tune 6런(2팔 × 3시드, 설계결정-0002 §1 인자 그대로) → 런마다 가중치를 Drive 에 즉시 저장
+   (PRD 암묵지 8) → held-out 평가. 학습·평가는 Colab 에서만 돈다(로컬에 torch 없음)
+2. **사람이 할 일** — `data/snapshots/` 의 tar 3개(1.63 GB)를 Drive 에 올린다
+3. **`pipelines/compare.py`** — Colab 이 내려 준 평가 결과로 `model_run` · `eval_result` 를 등록하고, Δ mAP 와 부트스트랩 CI
+   (held-out 프레임 × 학습 시드 동시 리샘플, rev.9 y5 와 같은 정의)를 오프라인 **+0.0241 [+0.0115, +0.0369]** 와 대조한다
 
 ```bash
-python run.py up          # 스택 기동 (healthy 까지 기다림) — 볼륨에 두 팔이 남아 있다
-python run.py bootstrap   # 버킷·버킷 알림·테이블·스키마 (멱등)
-python run.py test        # 단위 테스트 (스택이 떠 있으면 DynamoDB 대조 포함, 약 50 초)
+python run.py up          # 스택 기동 (healthy 까지 기다림) — 볼륨에 두 팔 · 계보가 남아 있다
+python run.py test        # 단위 테스트 (스택이 떠 있으면 DynamoDB · PG 대조 포함, 약 50 초)
 python run.py status      # 운영 테이블을 읽어 팔별 완료 판정을 ✓/✗ 로 굽는다
 ```
 
 ### 🟡 열린 질문 — 사람이 정할 것
 
-1. **점검 잔여물 631 아이템 삭제 승인** (`CLAUDE.md §6`). 재연결 수정 점검(임시 버킷 `ns-live-check`, 부팅 `e079c9c4…`)의 판정이
-   꺼져 있던 운영 수집기 세션에 쌓였다가 운영 테이블에 들어왔다 — DYN_B `FRAME#` 610(PENDING) · `BUNDLE#` 18 · `TEL#` 3. 번들이 이미 지운 임시
-   버킷에 있어 영원히 PENDING 이다. INDEXED 만 읽는 M2 에는 섞이지 않지만 계보 통계를 흐린다. 식별 조건은 부팅 ID `e079c9c4` 또는 버킷
-   `ns-live-check` 이고, 저수준 형식 백업이 `data/backup/contamination_e079c9c4.jsonl` 에 있다(되돌리기 = 줄마다 `put_item`).
-   재발은 수집기의 버킷 가드(`00deb41`)가 막는다
-2. **Colab 이 로컬 MinIO 에 닿지 않는다 — M3 학습 이미지를 어떻게 옮기나.** 경로가 증명되려면 학습 이미지가
-   MinIO 번들에서 꺼낸 것이어야 한다(`edge-agent/replay.py` 머리말). rev.9 는 데이터를 Google Drive 에 tar 로 올려 Colab 에서 풀었다
-   (`rev.9/08_이관/build_colab_nb.py`). 같은 방식 — M2 스냅샷이 manifest 와 번들에서 잘라 낸 JPEG 를 tar 로 묶고, 사람이 Drive 에 올린다 — 을 쓸지.
-   **M2 스냅샷 형식을 정하기 전에** 닫는다
-3. **계약 `S` 를 고칠지** — 선별분 페이로드가 계약 144,500 B 보다 STA_B +48% · DYN_B +42% 크다(§3 가정 5). 이번 규모에서는 무해하지만
+1. **계약 `S` 를 고칠지** — 선별분 페이로드가 계약 144,500 B 보다 STA_B +48% · DYN_B +42% 크다(§3 가정 5). 이번 규모에서는 무해하지만
    업링크 수요 · `δ_max` · `L_max` 가 그만큼 낙관적이다. **M3 결과를 보고하기 전에** 닫는다
-
-### 🔵 그다음 — M2 (계보 + 스냅샷)
-
-`pipelines/snapshot.py` — GSI1 `VIN#{vin}#STATE#INDEXED` → `manifest.jsonl` + PostgreSQL 계보 등록 → IN_DATASET.
-그 뒤 역추적 질의(조인 1회). 두 팔 모두 INDEXED 로 준비됐다. 보고서 §6-5 · `구현설계_MVP.md §1` M2.
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
