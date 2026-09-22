@@ -1,0 +1,77 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WhoAmI",
+      "Effect": "Allow",
+      "Action": ["sts:GetCallerIdentity"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IoTAccountLevel",
+      "Effect": "Allow",
+      "Action": [
+        "iot:DescribeEndpoint",
+        "iot:CreateKeysAndCertificate",
+        "iot:ListCertificates",
+        "iot:ListThings",
+        "iot:ListPolicies",
+        "iot:ListRoleAliases"
+      ],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-northeast-2"}}
+    },
+    {
+      "Sid": "IoTProjectResources",
+      "Effect": "Allow",
+      "Action": [
+        "iot:CreateThing", "iot:DeleteThing", "iot:DescribeThing",
+        "iot:AttachThingPrincipal", "iot:DetachThingPrincipal", "iot:ListThingPrincipals",
+        "iot:CreatePolicy", "iot:DeletePolicy", "iot:GetPolicy", "iot:ListPolicyVersions", "iot:DeletePolicyVersion",
+        "iot:AttachPolicy", "iot:DetachPolicy", "iot:ListTargetsForPolicy", "iot:ListAttachedPolicies",
+        "iot:UpdateCertificate", "iot:DeleteCertificate", "iot:DescribeCertificate", "iot:ListPrincipalThings",
+        "iot:CreateRoleAlias", "iot:DeleteRoleAlias", "iot:DescribeRoleAlias"
+      ],
+      "Resource": [
+        "arn:aws:iot:ap-northeast-2:*:thing/sim-*",
+        "arn:aws:iot:ap-northeast-2:*:thing/ns-*",
+        "arn:aws:iot:ap-northeast-2:*:policy/ns-*",
+        "arn:aws:iot:ap-northeast-2:*:cert/*",
+        "arn:aws:iot:ap-northeast-2:*:rolealias/ns-*"
+      ]
+    },
+    {
+      "Sid": "DynamoDBProjectTable",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:DescribeTable",
+        "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem",
+        "dynamodb:Query", "dynamodb:Scan"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:ap-northeast-2:*:table/ns-curation-index",
+        "arn:aws:dynamodb:ap-northeast-2:*:table/ns-curation-index/index/*"
+      ]
+    },
+    {
+      "Sid": "S3ProjectBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket", "s3:DeleteBucket", "s3:ListBucket", "s3:GetBucketLocation",
+        "s3:PutBucketPublicAccessBlock", "s3:GetBucketPublicAccessBlock",
+        "s3:PutObject", "s3:GetObject", "s3:DeleteObject"
+      ],
+      "Resource": ["arn:aws:s3:::ns-m4-*", "arn:aws:s3:::ns-m4-*/*"]
+    },
+    {
+      "Sid": "IAMRoleForCredentialProvider",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole",
+        "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:ListRolePolicies",
+        "iam:PassRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/ns-m4-*"
+    }
+  ]
+}
