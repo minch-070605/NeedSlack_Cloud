@@ -26,6 +26,7 @@ import test_replay as TR            # noqa: E402
 import verdict as V                 # noqa: E402
 
 NOW = "2026-09-22T12:00:00.000Z"
+BUCKET = "ns-raw-payload"            # 재생기 ReplayConfig 기본값과 같다
 PENDING, UPLOADED, DROPPED = (V.FrameState.PENDING.value, V.FrameState.UPLOADED.value,
                               V.FrameState.DROPPED.value)
 
@@ -33,7 +34,7 @@ PENDING, UPLOADED, DROPPED = (V.FrameState.PENDING.value, V.FrameState.UPLOADED.
 def fresh():
     t = S.MemoryTable()
     st = S.Store(t)
-    return t, st, CO.Collector(st, now=lambda: NOW)
+    return t, st, CO.Collector(st, BUCKET, now=lambda: NOW)
 
 
 def feed(col, sink, kinds=("verdict", "telemetry")):
@@ -207,6 +208,14 @@ class TestRejects(unittest.TestCase):
             with self.subTest(topic=topic, body=body[:20]):
                 with self.assertRaises(CO.Rejected):
                     self.col.handle(topic, body)
+
+    def test_foreign_bucket_rejected(self):
+        """점검용 임시 버킷을 가리키는 판정이 운영 테이블에 들어오지 않는다."""
+        d = json.loads(self.body)
+        d["verdicts"][0]["payload"]["bucket"] = "ns-live-check"
+        with self.assertRaises(CO.Rejected):
+            self.col.handle(self.topic, json.dumps(d).encode())
+        self.assertEqual(self.t.items, {})
 
     def test_unselected_verdict_rejected(self):
         d = json.loads(self.body)

@@ -23,6 +23,11 @@
 -------------------------------------------------------------------------------
 M4 에서 IoT 정책이 토픽을 차량별로 가른다(`${iot:Connection.Thing.ThingName}`). 본문 vin 을
 그대로 믿으면 한 차량이 남의 프레임을 쓸 수 있다 — 정책이 지키는 것은 토픽뿐이다.
+
+판정의 `payload.bucket` 이 이 수집기의 평면 2 버킷이 아니어도 버린다(조정기와 같은 규칙).
+판정 토픽은 공용이라, 임시 버킷을 쓰는 점검 재생의 판정이 꺼져 있던 운영 세션에도 쌓인다 —
+M1 뒤 점검에서 실제로 610 건이 운영 테이블에 PENDING 으로 들어왔다. 그 번들은 운영 조정기가
+결코 받지 않으므로 영원히 PENDING 에 남는다.
 """
 from __future__ import annotations
 
@@ -60,8 +65,8 @@ def topic_vin(topic: str) -> tuple[str, str]:
 
 
 class Collector:
-    def __init__(self, store: S.Store, now: Callable[[], str] = S.utc_now):
-        self.s, self.now = store, now
+    def __init__(self, store: S.Store, bucket: str, now: Callable[[], str] = S.utc_now):
+        self.s, self.bucket, self.now = store, bucket, now
         self.n = Counter()
 
     def handle(self, topic: str, payload: bytes) -> None:
@@ -92,6 +97,8 @@ class Collector:
                 v.validate()
             except ValueError as e:
                 raise Rejected(f"판정 불변식 위반: {e}") from e
+            if v.payload.bucket != self.bucket:
+                raise Rejected(f"payload 버킷 {v.payload.bucket} ≠ 평면 2 버킷 {self.bucket}")
 
         now = self.now()
         by_bundle: dict[tuple[str, str], list[str]] = defaultdict(list)
@@ -127,16 +134,17 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="수집기 — 판정 평면 MQTT → DynamoDB")
     ap.add_argument("--table", default=S.table_name(),
                     help="적재 테이블. 기본은 schema/ddb_table.json 의 운영 테이블 (점검용으로만 바꾼다)")
+    ap.add_argument("--bucket", default=None, help="평면 2 버킷. 기본은 S3_BUCKET")
     ap.add_argument("--client-id", default=CLIENT_ID,
                     help="영속 세션 이름. 운영에서는 바꾸지 않는다 — 바꾸면 보관된 메시지를 못 받는다")
     a = ap.parse_args(argv)
 
     from common import aws
     import subscriber
-    col = Collector(S.Store(S.DynamoTable(aws.dynamodb_client(), a.table)))
+    col = Collector(S.Store(S.DynamoTable(aws.dynamodb_client(), a.table)), a.bucket or aws.raw_bucket())
     return subscriber.run(
         a.client_id, list(TOPICS), col.handle, Rejected, col.n, col.summary,
-        banner=f"수집기 시작  client_id={a.client_id} · 테이블 {a.table}",
+        banner=f"수집기 시작  client_id={a.client_id} · 테이블 {a.table} · 버킷 {col.bucket}",
         stats_every_s=STATS_EVERY_S)
 
 if __name__ == "__main__":

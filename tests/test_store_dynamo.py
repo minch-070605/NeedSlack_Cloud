@@ -89,7 +89,7 @@ class TestDynamoMatchesMemory(unittest.TestCase):
         _, sink, _, _ = TR.run(n=60, every=1, queue_capacity=40_000)
 
         def sc(st):
-            col = TC.CO.Collector(st, now=lambda: TC.NOW)
+            col = TC.CO.Collector(st, TC.BUCKET, now=lambda: TC.NOW)
             for _ in range(3):
                 TC.feed(col, sink)
         self._assert_same(*self._both(sc))
@@ -98,7 +98,7 @@ class TestDynamoMatchesMemory(unittest.TestCase):
         _, sink, _, _ = TR.run(n=150, every=3)
 
         def sc(st):
-            col = TC.CO.Collector(st, now=lambda: TC.NOW)
+            col = TC.CO.Collector(st, TC.BUCKET, now=lambda: TC.NOW)
             TC.feed(col, sink)
             TC.arrive_all(st, sink)
         mem, ddb = self._both(sc)
@@ -110,7 +110,7 @@ class TestDynamoMatchesMemory(unittest.TestCase):
         _, sink, _, _ = TR.run(n=150, every=3)
 
         def sc(st):
-            col = TC.CO.Collector(st, now=lambda: TC.NOW)
+            col = TC.CO.Collector(st, TC.BUCKET, now=lambda: TC.NOW)
             TC.arrive_all(st, sink)
             TC.feed(col, sink)
         mem, ddb = self._both(sc)
@@ -125,7 +125,7 @@ class TestDynamoMatchesMemory(unittest.TestCase):
         half = dict(list(sink.blobs.items())[: len(sink.blobs) // 2])
 
         def sc(st):
-            col = TC.CO.Collector(st, now=lambda: TC.NOW)
+            col = TC.CO.Collector(st, TC.BUCKET, now=lambda: TC.NOW)
             rc = TRC.RC.Reconciler(st, TRC.MemoryBlobs(sink), TRC.BUCKET, ["sim-DYN_B"],
                                    now=lambda: TC.NOW)
             for key, (blob, meta) in half.items():          # 절반은 번들이 먼저
@@ -142,7 +142,7 @@ class TestDynamoMatchesMemory(unittest.TestCase):
         """스냅샷이 쓸 경로 — GSI1 로 한 차량의 한 상태만 뽑힌다."""
         r, sink, _, _ = TR.run(n=60, every=1, queue_capacity=40_000)
         st = S.Store(S.DynamoTable(self.c, self.name))
-        TC.feed(TC.CO.Collector(st, now=lambda: TC.NOW), sink)
+        TC.feed(TC.CO.Collector(st, TC.BUCKET, now=lambda: TC.NOW), sink)
         for state, want in (("PENDING", r.accepted), ("DROPPED", r.dropped)):
             n, kw = 0, {}
             while True:
