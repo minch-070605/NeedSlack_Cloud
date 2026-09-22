@@ -40,6 +40,11 @@ def raw_bucket() -> str:
     return _env("S3_BUCKET", "ns-raw-payload")
 
 
+def dataset_bucket() -> str:
+    """동결 데이터셋의 manifest · snapshot.json (설계결정-0002). 버킷 알림을 걸지 않는다."""
+    return _env("DATASET_BUCKET", "ns-datasets")
+
+
 def s3_client():
     import boto3
     return boto3.client("s3", endpoint_url=_endpoint("AWS_ENDPOINT_S3"), region_name=region())

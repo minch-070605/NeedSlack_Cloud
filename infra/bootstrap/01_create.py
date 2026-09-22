@@ -33,15 +33,16 @@ def _s3():
 
 
 def create_bucket():
+    """평면 2 버킷과 데이터셋 버킷(설계결정-0002). 알림은 평면 2 에만 건다."""
     from botocore.exceptions import ClientError
     s3 = _s3()
-    name = env("S3_BUCKET", "ns-raw-payload")
-    try:
-        s3.head_bucket(Bucket=name)
-        print(f"  버킷 {name} 이미 있음")
-    except ClientError:
-        s3.create_bucket(Bucket=name)
-        print(f"  버킷 {name} 생성")
+    for name in (env("S3_BUCKET", "ns-raw-payload"), env("DATASET_BUCKET", "ns-datasets")):
+        try:
+            s3.head_bucket(Bucket=name)
+            print(f"  버킷 {name} 이미 있음")
+        except ClientError:
+            s3.create_bucket(Bucket=name)
+            print(f"  버킷 {name} 생성")
 
 
 def attach_bucket_notification():
