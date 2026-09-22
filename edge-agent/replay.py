@@ -517,7 +517,10 @@ def main(argv: list[str]) -> int:
 
     sink = NullSink() if a.dry_run else None
     if sink is None:
-        sink = LiveSink(client_id=f"{V.vin_of(a.arm)}-{uuid.uuid4().hex[:8]}")
+        from common import aws
+        # IoT Core 는 client_id = Thing 이름(= vin) 만 허락한다. 로컬 Mosquitto 는 겹치지 않게 접미사를 붙인다
+        cid = V.vin_of(a.arm) if aws.mqtt_is_aws() else f"{V.vin_of(a.arm)}-{uuid.uuid4().hex[:8]}"
+        sink = LiveSink(client_id=cid)
     rp, frames = build(a.arm, sink, speed, a.limit)
     print(f"재생 시작  {a.arm} · {'dry-run' if a.dry_run else 'live'} · "
           f"speed {speed if speed else '페이싱 없음'} · boot {rp.cfg.boot_id}")

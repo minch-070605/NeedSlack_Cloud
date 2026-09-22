@@ -21,6 +21,8 @@
                M3 결과 검증 · 계보 등록 · 오프라인 대조       pipelines/compare.py
     status [출력경로]
                진행 현황 페이지를 산출물에서 굽는다          docs/build_status.py
+    m4 plan|up|check|run|down
+               M4 AWS 수직 절단면 — IoT Core · DynamoDB · S3 격리  infra/aws/m4.py
     primer m2|m3
                마일스톤 입문 페이지를 굽는다                 docs/build_primer.py
     guide [출력경로]
@@ -146,6 +148,11 @@ def cmd_status(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "docs", "build_status.py"), *args])
 
 
+def cmd_m4(*args: str) -> int:
+    _need_env_file()
+    return _run([sys.executable, os.path.join(ROOT, "infra", "aws", "m4.py"), *args])
+
+
 def cmd_primer(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "docs", "build_primer.py"), *args])
 
@@ -157,10 +164,10 @@ def cmd_guide(*args: str) -> int:
 COMMANDS = {
     "check": cmd_check, "up": cmd_up, "down": cmd_down,
     "bootstrap": cmd_bootstrap, "test": cmd_test, "contract": cmd_contract,
-    "replay": cmd_replay, "collect": cmd_collect, "reconcile": cmd_reconcile, "snapshot": cmd_snapshot, "notebook": cmd_notebook, "compare": cmd_compare, "status": cmd_status, "primer": cmd_primer, "guide": cmd_guide,
+    "replay": cmd_replay, "collect": cmd_collect, "reconcile": cmd_reconcile, "snapshot": cmd_snapshot, "notebook": cmd_notebook, "compare": cmd_compare, "status": cmd_status, "primer": cmd_primer, "m4": cmd_m4, "guide": cmd_guide,
 }
 #: 인자를 받는 명령
-TAKES_ARGS = {"replay", "collect", "reconcile", "snapshot", "compare", "status", "primer", "guide"}
+TAKES_ARGS = {"replay", "collect", "reconcile", "snapshot", "compare", "status", "primer", "m4", "guide"}
 
 
 def main(argv: list[str]) -> int:

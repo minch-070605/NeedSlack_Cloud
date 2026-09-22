@@ -8,6 +8,14 @@
     AWS_ENDPOINT_DYNAMODB=http://localhost:8000
     MQTT_HOST=localhost                          # M4 에서 IoT Core 엔드포인트로
 
+M4 — 컴포넌트마다 실제 AWS 로 돌린다 (`infra/aws/m4.py`)
+-------------------------------------------------------------------------------
+    DDB_TARGET=aws     DynamoDB 를 실제 AWS 로 (자격은 M4_AWS_* — 로컬 AWS_* 와 섞지 않는다)
+    MQTT_TARGET=aws    MQTT 를 AWS IoT Core 로 (mTLS 8883 · 인증서는 data/aws/certs/{client_id}.*)
+
+평면 2(S3 번들)는 M4 에서도 로컬 MinIO 에 남는다(설계결정-0002). 그래서 S3 에는 스위치가 없다.
+IoT Core 는 client_id 가 Thing 이름과 같아야 접속을 허락한다(정책변수 `${iot:Connection.Thing.ThingName}`).
+
 값은 `.env` 에서 온다 — `run.py` 가 읽어 환경에 넣는다. 자격은 boto3 기본 체인
 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)을 그대로 쓴다.
 
@@ -16,6 +24,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 
 
@@ -29,6 +38,47 @@ def _env(k: str, default: str | None = None) -> str:
 
 def _endpoint(k: str) -> str | None:
     return os.environ.get(k) or None          # 빈 문자열 = 실제 AWS
+
+
+def _target(kind: str) -> str:
+    v = os.environ.get(f"{kind}_TARGET", "local")
+    if v not in ("local", "aws"):
+        raise RuntimeError(f"{kind}_TARGET={v!r} — local 또는 aws")
+    return v
+
+
+def mqtt_is_aws() -> bool:
+    return _target("MQTT") == "aws"
+
+
+def m4_session():
+    """실제 AWS (IAM 사용자 ns-m4-admin). 루트 계정 키를 쓰지 않는다."""
+    import boto3
+    return boto3.Session(aws_access_key_id=_env("M4_AWS_ACCESS_KEY_ID"),
+                         aws_secret_access_key=_env("M4_AWS_SECRET_ACCESS_KEY"),
+                         region_name=_env("M4_AWS_REGION", "ap-northeast-2"))
+
+
+M4_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "aws")
+
+
+def m4_state() -> dict:
+    p = os.path.join(M4_DIR, "m4.json")
+    if not os.path.exists(p):
+        raise RuntimeError(f"{p} 가 없다 — `python run.py m4 up` 을 먼저 돌린다")
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def m4_cert_paths(client_id: str) -> tuple[str, str]:
+    d = os.path.join(M4_DIR, "certs")
+    return os.path.join(d, f"{client_id}.cert.pem"), os.path.join(d, f"{client_id}.private.key")
+
+
+def aws_ca_bundle() -> str:
+    """IoT Core 서버 인증서의 루트(Amazon Root CA)를 담은 botocore 의 CA 묶음. 새 의존성이 필요 없다."""
+    import botocore
+    return os.path.join(os.path.dirname(botocore.__file__), "cacert.pem")
 
 
 def region() -> str:
@@ -51,6 +101,8 @@ def s3_client():
 
 
 def dynamodb_client():
+    if _target("DDB") == "aws":
+        return m4_session().client("dynamodb")
     import boto3
     return boto3.client("dynamodb", endpoint_url=_endpoint("AWS_ENDPOINT_DYNAMODB"),
                         region_name=region())
@@ -78,6 +130,13 @@ def mqtt_client(client_id: str, persistent: bool = False, on_connect=None, on_me
         c.on_message = on_message
     if on_disconnect is not None:
         c.on_disconnect = on_disconnect
-    c.connect(_env("MQTT_HOST", "localhost"), int(_env("MQTT_PORT", "1883")), keepalive=60)
+    if mqtt_is_aws():
+        cert, key = m4_cert_paths(client_id)
+        if not os.path.exists(cert):
+            raise RuntimeError(f"{cert} 가 없다 — IoT Core 는 client_id({client_id}) 와 같은 이름의 Thing 인증서로만 붙는다")
+        c.tls_set(ca_certs=aws_ca_bundle(), certfile=cert, keyfile=key)
+        c.connect(m4_state()["iot_endpoint"], 8883, keepalive=60)
+    else:
+        c.connect(_env("MQTT_HOST", "localhost"), int(_env("MQTT_PORT", "1883")), keepalive=60)
     c.loop_start()
     return c
