@@ -151,7 +151,7 @@ def up(s) -> dict:
         print(f"  역할 {ROLE} 이미 있음")
     except iam.exceptions.NoSuchEntityException:
         role_arn = iam.create_role(RoleName=ROLE, AssumeRolePolicyDocument=json.dumps(role_trust()),
-                                   Description="NeedSlack M4 — 차량 인증서가 받는 S3 임시 자격")["Role"]["Arn"]
+                                   Description="NeedSlack M4 - S3 temp credentials for vehicle certs (own vin prefix only)")["Role"]["Arn"]
         print(f"  역할 {ROLE} 생성")
     iam.put_role_policy(RoleName=ROLE, PolicyName="s3-own-prefix", PolicyDocument=json.dumps(role_s3_policy(st["bucket"])))
     st["role_arn"] = role_arn
