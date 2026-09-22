@@ -24,13 +24,17 @@
     }
   ],
   "_access_patterns": {
-    "프레임 단건 조회":  { "PK": "FRAME#{frame_uuid}", "SK": "META" },
-    "런별 판정 시계열":  { "PK": "RUN#{run_id}",       "SK": "TS#{t_frame_utc}#{frame_id}" },
-    "런의 상태별 조회":  { "GSI1PK": "RUN#{run_id}#STATE#{state}", "GSI1SK": "{t_ingest_utc}" }
+    "프레임 단건 조회":    { "PK": "FRAME#{frame_uuid}", "SK": "META" },
+    "차량별 판정 시계열":  { "PK": "VIN#{vin}",          "SK": "TS#{t_frame_utc}#{frame_id}" },
+    "차량의 상태별 조회":  { "GSI1PK": "VIN#{vin}#STATE#{state}", "GSI1SK": "{t_ingest_utc}" },
+    "번들 → 판정 목록":    { "PK": "BUNDLE#{payload.key}", "SK": "FRAME#{frame_uuid}" },
+    "번들 도착 표시":      { "PK": "BUNDLE#{payload.key}", "SK": "ARRIVED" }
   },
   "_notes": [
     "정렬키에 수치를 넣을 때는 고정 폭 제로패딩을 쓴다. DynamoDB 정렬은 사전식이라 '231' < '99' 가 참이 된다.",
     "쓰기는 조건부(attribute_not_exists(PK))로 건다. 재전송은 확률이 아니라 확실성이다.",
-    "PENDING 은 정상 상태다. 오래 머무는 것으로 알람하지 않는다."
+    "PENDING 은 정상 상태다. 오래 머무는 것으로 알람하지 않는다.",
+    "적재 단위는 vin(= 팔)이다. 재생이 팔당 1회라 run_id(팔×시드)는 적재 시점에 존재하지 않는다 — run_id 는 학습 단계(PostgreSQL model_run)의 식별자다.",
+    "BUNDLE# 아이템은 조정 단위(번들 1개 = S3 이벤트 1건)에서 판정을 찾는 경로다. 수집기가 선별 판정마다 FRAME#{frame_uuid} 행을, 조정기가 S3 이벤트마다 ARRIVED 행을 쓴다. 어느 쪽이 먼저 와도 나중에 온 쪽이 상대 행을 보고 전이한다(스큐 3경우). GSI1PK 를 싣지 않으므로 GSI1 에 들어가지 않는다(희소 인덱스)."
   ]
 }
