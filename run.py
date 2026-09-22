@@ -16,6 +16,7 @@
     reconcile  조정기 — S3 이벤트 → 상태 전이·체크섬 (Ctrl+C) ingest/reconciler.py
     snapshot common|ARM
                M2 데이터셋 스냅샷 (tar · manifest · 계보)     pipelines/snapshot.py
+    notebook   M3 Colab 노트북을 굽는다                      pipelines/build_colab_nb.py
     status [출력경로]
                진행 현황 페이지를 산출물에서 굽는다          docs/build_status.py
     guide [출력경로]
@@ -127,6 +128,11 @@ def cmd_snapshot(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "pipelines", "snapshot.py"), *args])
 
 
+def cmd_notebook(*args: str) -> int:
+    _need_env_file()
+    return _run([sys.executable, os.path.join(ROOT, "pipelines", "build_colab_nb.py"), *args])
+
+
 def cmd_status(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "docs", "build_status.py"), *args])
 
@@ -138,7 +144,7 @@ def cmd_guide(*args: str) -> int:
 COMMANDS = {
     "check": cmd_check, "up": cmd_up, "down": cmd_down,
     "bootstrap": cmd_bootstrap, "test": cmd_test, "contract": cmd_contract,
-    "replay": cmd_replay, "collect": cmd_collect, "reconcile": cmd_reconcile, "snapshot": cmd_snapshot, "status": cmd_status, "guide": cmd_guide,
+    "replay": cmd_replay, "collect": cmd_collect, "reconcile": cmd_reconcile, "snapshot": cmd_snapshot, "notebook": cmd_notebook, "status": cmd_status, "guide": cmd_guide,
 }
 #: 인자를 받는 명령
 TAKES_ARGS = {"replay", "collect", "reconcile", "snapshot", "status", "guide"}
