@@ -378,7 +378,7 @@ def ci_plot(d: dict) -> str:
     rows = [("파이프라인", "dyn_b", d["delta"]["pipeline"]), ("오프라인 rev.9", "idle", d["delta"]["offline"])]
     lo = min(0.0, min(r[2]["ci"][0] for r in rows)) - 0.005
     hi = max(r[2]["ci"][1] for r in rows) + 0.005
-    W, L, R, T, rh = 720, 130, 24, 24, 46
+    W, L, R, T, rh = 720, 130, 24, 24, 62
     H = T + rh * len(rows) + 40
     X = lambda v: L + (W - L - R) * (v - lo) / (hi - lo)          # noqa: E731
     step = 0.01
@@ -394,7 +394,8 @@ def ci_plot(d: dict) -> str:
         marks += (f'<text class="ci-lbl" x="{L - 12}" y="{y + 4:.1f}" text-anchor="end">{name}</text>'
                   f'<line class="ci-{cls}" x1="{X(e["ci"][0]):.1f}" x2="{X(e["ci"][1]):.1f}" y1="{y:.1f}" y2="{y:.1f}"/>'
                   f'<circle class="pt-{cls}" cx="{X(e["delta"]):.1f}" cy="{y:.1f}" r="6"/>'
-                  f'<text class="ci-v" x="{X(e["ci"][1]) + 8:.1f}" y="{y + 4:.1f}">{e["delta"]:+.4f} [{e["ci"][0]:+.4f}, {e["ci"][1]:+.4f}]</text>')
+                  f'<text class="ci-v" x="{X((e["ci"][0] + e["ci"][1]) / 2):.1f}" y="{y + 22:.1f}" text-anchor="middle">'
+                  f'{e["delta"]:+.4f} [{e["ci"][0]:+.4f}, {e["ci"][1]:+.4f}]</text>')
     return (f'<figure class="hist"><svg viewBox="0 0 {W} {H}" role="img" aria-label="Δ mAP50 과 95% CI — 파이프라인 대 오프라인">'
             f'{ticks}{zero}{marks}<text class="tk" x="{W - R}" y="{H - 4}" text-anchor="end">Δ mAP50 = DYN_B − STA_B</text></svg>'
             f'<figcaption>점 = Δ(세 시드 평균의 차), 선 = 95% CI (held-out {d["n_held_out"]:,} 프레임 × 시드 부트스트랩 {d["boot"]}회). 세로 실선이 0.</figcaption></figure>')
