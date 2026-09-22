@@ -123,6 +123,7 @@ frame_uuid = SHA256( vin ‖ boot_id ‖ drive_session ‖ frame_id )[:16]
 
 ```
 PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶ INDEXED ──▶ IN_DATASET
+   │                          └──(체크섬 불일치 · 구간 초과)──▶ QUARANTINED
    └──(TTL 만료 / 드롭 보고)──▶ DROPPED
 ```
 
@@ -188,6 +189,18 @@ PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶
 나중에 온 쪽이 반드시 상대의 기록을 본다(수용 기준 6 의 스큐 3경우). 전이는 조건부
 (`state = PENDING`)라 양쪽이 같은 프레임을 옮기려 해도 한 번만 일어난다. `BUNDLE#` 아이템은
 `GSI1PK` 를 싣지 않아 GSI1 에 들어가지 않는다. 와이어 형식(번들 본문·판정 필드)은 바뀌지 않는다.
+
+**조정기는 이벤트만 믿지 않는다** (`ingest/reconciler.py`). 입력이 셋이다.
+
+| 입력 | 언제 | 메우는 틈 |
+|---|---|---|
+| S3 이벤트 | 번들 PUT 마다 | — (주 경로) |
+| 버킷 대조 | 기동 시 | 조정기 세션이 생기기 전의 번들 · 잃은 이벤트 |
+| UPLOADED 스윕 (GSI1) | 30 초마다 | 판정이 번들보다 늦게 와 **수집기가** UPLOADED 로 옮긴 프레임 · 검증 도중 죽은 경우 |
+
+검증은 번들을 한 번 GET 해 판정의 `payload.offset/length` 로 잘라 `sha256` 을 대조한다
+(프레임마다 Range GET 하면 요청이 35배다). 도착 지연 `arrival_latency_s = t_put_utc − t_frame_utc`
+는 차량 시계끼리 잰다. 격리는 **키 접두사의 vin** 을 믿는다 — 메타데이터 vin 이 다르면 버린다.
 
 **DROPPED 는 판정이 없는 프레임이다.** 즉시 드롭은 판정을 내지 않으므로, 수집기가 텔레메트리
 `dropped_frame_uuids` 로 `FRAME#` 아이템을 DROPPED 로 만든다.
@@ -312,7 +325,7 @@ needslack-cloud/
 ├ ingest/
 │   ├ store.py                    키 규약 · 상태 전이 (DynamoTable · MemoryTable)
 │   ├ collector.py                판정·텔레메트리 MQTT → DynamoDB
-│   └ reconciler.py               S3 이벤트(MinIO 버킷 알림 → MQTT) → 상태 전이
+│   └ reconciler.py               S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED
 ├ pipelines/
 │   ├ snapshot.py                 DynamoDB → manifest.jsonl + PG
 │   ├ colab_train.ipynb           재학습 (rev.9/08_이관 재사용)

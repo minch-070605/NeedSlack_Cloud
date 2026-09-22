@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 재생기·수집기 완료(M1-2·3·4). 다음은 조정기 `ingest/reconciler.py`**
+최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 재생기·수집기·조정기 완료(M1-2~5). 다음은 DYN_B 완주(M1-6)**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 > 도커 스택은 세션 사이에 내려 둔다 — 이어서 스택이 필요하면 Docker Desktop 을 켜고 `python run.py up`.
@@ -103,13 +103,14 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `infra/bootstrap/00_check.ps1` | 환경 점검 (WSL · Docker Desktop · 엔진). **UTF-8 BOM 필수** — §5 | ✅ 통과 |
 | `infra/bootstrap/01_create.py` | 버킷·버킷 알림 규칙·테이블·스키마 생성. **2회 실행으로 멱등 확인** | ✅ 실행 |
 | `ingest/store.py` | **키 규약·상태 전이의 단일 구현.** `DynamoTable`(실제) · `MemoryTable`(테스트) 두 구현 위에 선다 | ✅ |
-| `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED. 영속 세션·수동 PUBACK. 라이브 점검 통과(아래) | ✅ |
-| `tests/` | **68건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 30 초) | ✅ |
+| `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED. 영속 세션·수동 PUBACK. 라이브 점검 통과(§4) | ✅ |
+| `tests/` | **84건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초) | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
-| `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` `replay` `collect` `status` `guide` | ✅ |
+| `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` `replay` `collect` `reconcile` `status` `guide` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
 | `.venv/` · `.env` | 전용 파이썬 3.12.10 환경 · 로컬 환경값 (둘 다 커밋 안 됨) | ✅ |
-| `ingest/reconciler.py` · `pipelines/` | 조정기 · M2~M4 | 🔲 **아직 없음** |
+| `ingest/reconciler.py` | **조정기** — S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED / QUARANTINED. 라이브 점검 통과(§4) | ✅ |
+| `pipelines/` | M2~M4 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
@@ -187,34 +188,9 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — 조정기 `ingest/reconciler.py` (M1-5)
+### 🔴 먼저 — M1 완주 (M1-6)
 
-S3 번들 이벤트 → `BUNDLE#` 도착 기록 → PENDING → UPLOADED → 체크섬 → INDEXED(실패 시 QUARANTINED).
-키 규약·승격 규칙은 `ingest/store.py` 에 이미 있다(`bundle_mark_arrived` · `promote_uploaded`) —
-조정기는 그것을 부르고 체크섬만 새로 한다. 해야 할 것:
-
-1. 구독 `verdict.TOPIC_S3_EVENTS` — **영속 세션 · 수동 PUBACK** (수집기와 같은 규약, `구현설계_MVP.md §8`)
-2. 이벤트 키는 **URL 디코딩**한다. 번들 메타(`vin` · `n-frames` · `t-put-utc`)를 도착 속성으로 싣는다
-3. UPLOADED → INDEXED: 판정의 `payload.offset/length` 로 Range GET → `sha256` 대조
-4. **버킷 목록 대조** — 기동할 때 버킷을 훑어 도착 기록이 없는 번들을 처리한다(이벤트 유실 보완)
-5. 도착 지연 = `t_put_utc − t_frame_utc` (**차량 시계끼리**. 벽시계로 재면 가속 재생에서 틀린다)
-
-수집기 라이브 점검(임시 테이블·버킷, DYN_B 앞 3,000 후보 · 12.5배속) — 두 경우 모두 재생 보고와 일치:
-
-| 경우 | 결과 |
-|---|---|
-| 수집기가 꺼진 채 재생 → 나중에 기동 | 판정 147 · 메시지 84 · 텔레메트리 1 · 번들 5 전부 적재 (세션이 보관) |
-| 재생 도중 수집기 강제 종료 → 재기동 | 누적 FRAME 294 = 147 × 2 · BUNDLE 10 · TEL 2. 유실·중복 아이템 0 |
-
-### 🔵 그다음 — M1 마무리
-
-1. 터미널 셋 — `python run.py collect` · 조정기 · `python run.py replay DYN_B`
-   (실시간이면 약 67 분, `REPLAY_SPEED=12.5` 면 약 5.4 분)
-2. DYN_B 재생 1회 완주 확인 — 판정 2,449건이 INDEXED (**M1 완료**)
-
-> DynamoDB Local 은 호출당 약 76 ms(실측 — PutItem 100건 7.6 s)라 수집기 처리량은 초당 약 13 호출이다.
-> DYN_B 1회는 판정 2,449 + 번들 갱신 약 730 ≈ 3,200 호출이라 12.5배속 재생(5.4 분)을 따라간다.
-> 밀려도 메시지는 브로커 세션에 쌓일 뿐 잃지 않는다.
+운영 테이블·버킷으로 DYN_B 를 한 번 끝까지 통과시킨다. 준비:
 
 ```bash
 python run.py up          # 스택 기동 (healthy 까지 기다림)
@@ -222,6 +198,37 @@ python run.py bootstrap   # 버킷·버킷 알림·테이블·스키마 (멱등)
 python run.py test        # 단위 테스트
 python run.py replay DYN_B --dry-run   # 재생기 — 스택 없이 계약만 (약 5초)
 ```
+
+그다음 터미널 셋:
+
+```bash
+python run.py collect                          # 수집기 (Ctrl+C 로 멈춤)
+python run.py reconcile                        # 조정기 (Ctrl+C 로 멈춤)
+python run.py replay DYN_B                     # REPLAY_SPEED=12.5 면 약 5.4 분
+```
+
+**완료 판정**: 판정 2,449 건이 전부 INDEXED · QUARANTINED 0 · `arrival_latency_s` 최대가 재생 보고의
+"번들 기준 도착지연 최대"와 같다. 이것이 **M1 완료**다.
+
+> 처리 속도 (추정 — 호출 수 × 실측 76 ms). DynamoDB Local 은 호출당 약 76 ms(PutItem 100건 7.6 s)다.
+> 수집기는 약 3,200 호출(판정 2,449 + 번들 갱신 약 730)이라 12.5배속 재생을 따라간다.
+> 조정기는 번들당 약 106 호출(도착 1 · 승격 35 · 조회 35 · 검증 35) × 70 번들 ≈ 7,400 호출이라
+> **재생보다 수 분 늦게 끝난다** — 밀린 이벤트는 브로커 세션에 쌓일 뿐 잃지 않는다.
+
+`ingest/` 라이브 점검 결과. 임시 테이블·버킷·세션을 쓰고 끝난 뒤 지웠다. 입력은 DYN_B 앞 3,000 후보 · 12.5배속이고, 모든 경우가 재생 보고와 일치했다:
+
+| 경우 | 결과 |
+|---|---|
+| 수집기가 꺼진 채 재생 → 나중에 기동 | 판정 147 · 메시지 84 · 텔레메트리 1 · 번들 5 전부 적재 (세션이 보관) |
+| 재생 도중 수집기 강제 종료 → 재기동 | 누적 FRAME 294 = 147 × 2 · BUNDLE 10 · TEL 2. 유실·중복 아이템 0 |
+| 수집기·조정기 기동 중 재생 | 147 전부 INDEXED |
+| 조정기가 꺼진 채 재생 → 재기동 | 누적 294 전부 INDEXED. 번들 4개는 버킷 대조가, 1개는 세션 이벤트가 처리 |
+| 도착 지연 `arrival_latency_s` | 최대 69.4 s = 재생 보고 "번들 기준 69 s" · 최소 5.8 s |
+
+### 🔵 그다음 — M2 (계보 + 스냅샷)
+
+`pipelines/snapshot.py` — GSI1 `VIN#{vin}#STATE#INDEXED` → `manifest.jsonl` + PostgreSQL 계보 등록.
+그 뒤 역추적 질의(조인 1회). 보고서 §6-5 · `구현설계_MVP.md §1` M2.
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
