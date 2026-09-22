@@ -26,6 +26,13 @@ class TestContract(unittest.TestCase):
         """수요가 링크를 넘지 않으면 큐도 드롭도 존재 이유가 없다."""
         self.assertGreater(C.demand_bps, C.uplink_bps)
 
+    def test_rederive_reproduces_contract(self):
+        """실측 S 로 다시 유도하는 식이 계약의 식과 같다 — 계약 S 를 넣으면 계약값이 나온다."""
+        d = C.rederive(C.payload_bytes)
+        for k in ("demand_bps", "sustainable_rate", "max_drive_duty", "queue_growth_bps",
+                  "max_arrival_latency_s", "queue_min_bytes"):
+            self.assertAlmostEqual(d[k], getattr(C, k), delta=1e-9 * max(1.0, abs(getattr(C, k))), msg=k)
+
     def test_frame_interval(self):
         self.assertAlmostEqual(C.frame_interval_s, 1.0 / C.cand_rate_hz)
 

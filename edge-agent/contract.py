@@ -47,6 +47,24 @@ class EdgeContract:
         """링크가 초당 빼낼 수 있는 바이트. 토큰버킷의 충전율."""
         return self.uplink_bps / 8.0
 
+    def rederive(self, payload_bytes: float) -> dict[str, float]:
+        """페이로드 크기만 바꿔 유도값을 다시 낸다. 식은 rev.9 `config.py` 의 `uplink_*` 함수와 같다.
+
+        계약은 동결이라 고치지 않는다 — 실측 페이로드가 계약 `S` 와 다를 때 그 차이가 상한을
+        얼마나 옮기는지 **발견으로 병기**하는 데만 쓴다. `rederive(self.payload_bytes)` 는 계약 JSON 의
+        유도값을 그대로 내야 한다(tests/test_uplink.py 가 검사).
+        """
+        demand = self.select_rate * self.cand_rate_hz * payload_bytes * 8.0      # uplink_demand_bps
+        sustainable = self.uplink_bps / (8.0 * payload_bytes * self.cand_rate_hz)
+        duty = sustainable / self.select_rate                                    # uplink_max_drive_duty
+        latency = max(0.0, 1.0 - duty) * self.duty_period_s                      # uplink_max_arrival_latency_s
+        return {"payload_bytes": float(payload_bytes), "demand_bps": demand,
+                "sustainable_rate": sustainable, "max_drive_duty": duty,
+                "drive_hours_per_day": duty * self.duty_period_s / 3600.0,
+                "queue_growth_bps": max(0.0, (demand - self.uplink_bps) / 8.0),
+                "max_arrival_latency_s": latency,
+                "queue_min_bytes": self.uplink_bps / 8.0 * latency}             # uplink_queue_min_bytes
+
     def describe(self) -> str:
         return (f"링크 {self.uplink_bps/1e6:.3f} Mbps · 수요 {self.demand_bps/1e6:.3f} Mbps · "
                 f"듀티상한 {self.max_drive_duty:.4f} · "

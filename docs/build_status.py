@@ -402,6 +402,16 @@ def render(ctx: dict) -> str:
         ("DYN_B 선별 평균", rep["DYN_B"].payload_mean_bytes, "dyn_b"),
     ], c.payload_bytes)
     over = [100 * (rep[a].payload_mean_bytes / c.payload_bytes - 1) for a in arms]
+    # 계약은 동결 — 실측 S 로 같은 식을 다시 돌린 값을 병기한다 (README §3 가정 5 결정)
+    rd = [("계약 S", c.rederive(c.payload_bytes))] + [(f"{a} 실측", c.rederive(rep[a].payload_mean_bytes)) for a in arms]
+    rows_rd = [("페이로드 S", lambda d: f"{d['payload_bytes']:,.0f} B"),
+               ("업링크 수요", lambda d: f"{d['demand_bps'] / 1e6:.2f} Mbps"),
+               ("주행 듀티 상한 δ_max", lambda d: f"{d['drive_hours_per_day']:.2f} h/일"),
+               ("도착 지연 상한 L_max", lambda d: f"{d['max_arrival_latency_s'] / 3600:.2f} h"),
+               ("큐 요구량 Q_min", lambda d: f"{d['queue_min_bytes'] / 1e9:.2f} GB")]
+    rederive = ('<div class="tbl-wrap"><table><thead><tr><th></th>' + "".join(f"<th>{E(n)}</th>" for n, _ in rd)
+                + "</tr></thead><tbody>" + "".join(f"<tr><th>{E(k)}</th>" + "".join(f'<td class="num">{f(d)}</td>' for _, d in rd)
+                + "</tr>" for k, f in rows_rd) + "</tbody></table></div>")
 
     mism = sig["_findings"]["frames_bin_vs_interim_mismatch"]
     n_pool = len(sig["pool_frame"])
@@ -425,7 +435,7 @@ def render(ctx: dict) -> str:
         + tile_bar("DYN_B", sig["arms"]["DYN_B"]["tile_hist"], sig["arms"]["DYN_B"]["mean_tiles"]),
         c_tile=f"{sig['operating_point']['c_tile_ms']:.2f}", budget=n0(sig["operating_point"]["budget"]),
         n_pool=n0(n_pool), table=table, gauges=gauges, sizes=sizes,
-        over_sta=f"{over[0]:+.0f}", over_dyn=f"{over[1]:+.0f}",
+        over_sta=f"{over[0]:+.0f}", over_dyn=f"{over[1]:+.0f}", rederive=rederive,
         mism_conf=n0(mism["conf_q8"]["frames"]), mism_det=n0(mism["det_count"]["frames"]),
         mism_mp=n0(mism["mean_p"]["frames"]), mism_kn=n0(mism["kinematic_u8"]["frames"]),
         profile_sha=E(sig["profile"]["sha"]), log=log,
@@ -645,7 +655,9 @@ svg .mk-t{{font-size:12px;font-weight:600}}
   {sizes}
   <div class="callout"><p><strong>선별분 페이로드가 계약 S 보다 크다 — STA_B {over_sta}% · DYN_B {over_dyn}%.</strong>
   전체 평균은 계약 근거와 맞지만 가치 기반 선별은 복잡한 장면(큰 JPEG)을 고른다. 업링크 수요 · δ_max · L_max 가 그만큼 낙관적이다.
-  이번 런 규모에서는 큐 여유가 커서 드롭이 없었다. 계약을 고칠지는 결정이 필요하다.</p></div>
+  이번 런 규모에서는 큐 여유가 커서 드롭이 없었다.</p>
+  <p><strong>결정 — 계약은 고치지 않는다.</strong> 계약은 동결된 rev.9 <code>config.py</code> 의 스냅샷이다. 대신 같은 식(<code>EdgeContract.rederive</code>)에
+  실측 평균 S 를 넣은 값을 아래에 병기한다. Δ mAP 결론에는 영향이 없다.</p>{rederive}</div>
   <div class="callout"><p><strong>rev.9 frames.bin 의 conf_q8·det_count 가 interim 현재본과 다르다</strong>
   (pool {n_pool} 중 conf_q8 {mism_conf} · det_count {mism_det} · mean_p {mism_mp} · kinematic_u8 {mism_kn} 프레임).
   profile <code>{profile_sha}</code> 가 w_conf = 0 이라 value_score 는 불변이고, 선별은 타일 YOLO 점수라 대조와 무관하다. rev.9 는 동결이라 기록만 한다.</p></div>
