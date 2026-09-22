@@ -188,23 +188,26 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 ### 🔴 먼저 — `ingest/` (M1-4·5)
 
 수집기(MQTT 판정·텔레메트리 → DynamoDB 조건부 쓰기) + 조정기(S3 번들 이벤트 → 상태 전이).
-재생기가 내보내는 것은 `구현설계_MVP.md §2-4` 표가 전부다. 착수 전에 닫을 것 셋:
+재생기가 내보내는 것은 `구현설계_MVP.md §2-4` 표가 전부다. 착수 조건은 전부 닫혔다:
 
-1. **MinIO 버킷 알림을 MQTT 로 받을 수 있는지 확인** — 안 되면 웹훅용 HTTP 가 필요해져
-   의존성을 다시 물어야 한다(`구현설계_MVP.md §8`).
-2. **DynamoDB 런별 키가 옛 런 모델이다** — `ddb_table.json` 이 `RUN#{run_id}`(팔×시드)로
-   되어 있지만 재생은 팔당 1회라 적재 단위는 `vin`(= 팔)이다. 키를 `vin` 기준으로 고칠지 결정.
-   아직 테이블에 데이터가 없어 지금 바꾸는 비용이 가장 싸다(`CLAUDE.md §6` 키 스키마 변경).
-3. **번들 하나가 조정 단위다** — S3 이벤트 1건이 35 판정을 UPLOADED 로 옮긴다. 번들 키 → 판정
-   목록 조회 경로가 필요하다(판정의 `payload.key` 로 GSI 또는 번들 매니페스트).
+| 조건 | 결론 | 근거 |
+|---|---|---|
+| S3 이벤트 수신 경로 | **MinIO `notify_mqtt` → Mosquitto.** HTTP 불필요 | 이 스택에서 PUT 1건 → 이벤트 1건 도착 확인. 형태는 `구현설계_MVP.md §8` |
+| DynamoDB 적재 단위 | **`VIN#{vin}`** (팔 = 차량) | `schema/ddb_table.json` · `구현설계_MVP.md §3-1`. 속성 이름 불변이라 테이블 재생성 없음 |
+| 번들 → 판정 조회 | **`BUNDLE#{payload.key}` 아이템** (`FRAME#` 행 · `ARRIVED` 행) | 같은 곳. 와이어 형식 불변 |
+
+순서: ① 알림 설정을 코드로 굳힌다 — compose 의 MinIO 환경변수(`queue_dir` 포함) +
+부트스트랩의 버킷 알림 규칙 ② 수집기 ③ 조정기 ④ 수용 기준 5·6 테스트(멱등 · 스큐 3경우).
 
 ### 🔵 그다음 — M1 마무리
 
 1. `python run.py replay DYN_B` (실시간이면 약 67 분, `REPLAY_SPEED=12.5` 면 약 5.4 분) → 수집·조정 확인
 2. 1런 완주 확인 (**M1 완료**)
 
-> MinIO 에 스모크 번들 1개가 남아 있다 — `vin=sim-DYN_B/boot=854e1879-…/` (3.9 MB, 판정 25건분).
-> 수집기가 없던 때라 대응 판정이 DynamoDB 에 없다. 지울지는 사람이 정한다(`CLAUDE.md §6`).
+> MinIO 에 지울지 사람이 정할 것이 둘 남아 있다(`CLAUDE.md §6`). 완주 재생 전에 정리한다.
+> - 스모크 번들 1개 — `ns-raw-payload/vin=sim-DYN_B/boot=854e1879-…/` (3.9 MB, 판정 25건분).
+>   수집기가 없던 때라 대응 판정이 DynamoDB 에 없다.
+> - 알림 확인용 버킷 `ns-notify-probe` — 6 B 객체 1개. 알림 규칙·대상 설정은 이미 되돌렸다.
 
 ```bash
 python run.py up          # 스택 기동 (healthy 까지 기다림)

@@ -48,7 +48,7 @@ M1  한 팔이 로컬을 통과
     3. edge-agent/     업링크 — 토큰버킷 · store&forward · 즉시 드롭
     4. ingest/         수집기 — MQTT 구독 → DynamoDB 조건부 쓰기
     5. ingest/         조정기 — S3 이벤트 → 상태 전이
-    6.                 1런(DYN_B-s1) 완주 확인
+    6.                 DYN_B 재생 1회 완주 확인 (판정 → INDEXED)
 
 M2  계보 + 스냅샷
     7. schema/pg/      PostgreSQL 스키마 적용
@@ -80,7 +80,7 @@ M4  AWS 수직 절단면
 | 필드 | 형 | 출처 | 비고 |
 |---|---|---|---|
 | `schema_version` | u16 | 고정 `1` | **모든 레코드에 반드시** |
-| `vin` | str | 런 모델(§4) | `sim-{ARM}-s{SEED}` |
+| `vin` | str | 런 모델(§4) | `sim-{ARM}` |
 | `boot_id` | str | 재생기 생성 | UUIDv4. 세션마다 새로 |
 | `drive_session` | u32 | 재생기 | 시동 주기 |
 | `frame_id` | u32 | `frames.bin` | **로컬 인덱스. 전역 유일 아님** |
@@ -107,7 +107,7 @@ M4  AWS 수직 절단면
 **배치 봉투** — 메시지 1건에 N개 판정을 담는다.
 
 ```jsonc
-{ "schema_version": 1, "vin": "sim-DYN_B-s1", "sent_at": "...", "verdicts": [ /* … */ ] }
+{ "schema_version": 1, "vin": "sim-DYN_B", "sent_at": "...", "verdicts": [ /* … */ ] }
 ```
 
 ### 2-2. 키
@@ -167,12 +167,22 @@ PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶
 | 용도 | 키 |
 |---|---|
 | 프레임 단건 | `PK = FRAME#{frame_uuid}` · `SK = META` |
-| 런별 시계열 | `PK = RUN#{run_id}` · `SK = TS#{t_frame_utc}#{frame_id}` |
-| 상태별 조회 | **GSI1** `GSI1PK = RUN#{run_id}#STATE#{state}` · `GSI1SK = {t_ingest_utc}` |
+| 차량별 시계열 | `PK = VIN#{vin}` · `SK = TS#{t_frame_utc}#{frame_id}` |
+| 상태별 조회 | **GSI1** `GSI1PK = VIN#{vin}#STATE#{state}` · `GSI1SK = {t_ingest_utc}` |
+| 번들 → 판정 목록 | `PK = BUNDLE#{payload.key}` · `SK = FRAME#{frame_uuid}` — 수집기가 선별 판정마다 쓴다 |
+| 번들 도착 표시 | `PK = BUNDLE#{payload.key}` · `SK = ARRIVED` — 조정기가 S3 이벤트마다 쓴다 |
+
+**적재 단위는 `vin`(= 팔)이다.** 재생이 팔당 1회라 적재 시점에는 `run_id`(팔×시드)가
+존재하지 않는다. `run_id` 는 학습 단계의 식별자이고 PostgreSQL `model_run` 이 가진다.
+
+**조정 단위는 번들이다.** S3 이벤트 1건이 판정 35건을 UPLOADED 로 옮기므로, 번들 키에서
+판정을 찾는 경로가 `BUNDLE#` 아이템이다. 판정과 번들 중 어느 쪽이 먼저 와도 나중에 온 쪽이
+상대 행을 보고 전이한다(수용 기준 6 의 스큐 3경우). `BUNDLE#` 아이템은 `GSI1PK` 를 싣지
+않아 GSI1 에 들어가지 않는다. 와이어 형식(번들 본문·판정 필드)은 바뀌지 않는다.
 
 > **GSI2(점수 버킷 마이닝)는 MVP 에서 만들지 않는다.** 선별이 이미 오프라인에서
 > 끝나 있어 클라우드가 점수로 고를 일이 없다. 보고서 §2-4 의 GSI2 는 목표 아키텍처용이다.
-> **샤드 접미사도 불필요하다** — 6런이 각자 다른 `run_id` 를 쓰므로 핫 파티션이 없다.
+> **샤드 접미사도 불필요하다** — 차량이 2대(팔당 1대)이고 각자 다른 `vin` 을 쓰므로 핫 파티션이 없다.
 
 ### 3-2. PostgreSQL (MVP 5 테이블)
 
@@ -192,16 +202,16 @@ DDL 은 보고서 §2-5 를 그대로 쓰되 두 가지만 조정한다:
 ```
 ARM   ∈ {STA_B, DYN_B}          팔
 SEED  ∈ {1, 2, 3}               시드
-run_id = {ARM}-s{SEED}          예: DYN_B-s1
-vin    = sim-{ARM}-s{SEED}      런마다 별개의 "차량"
+vin    = sim-{ARM}              팔마다 별개의 "차량" — 재생·적재 단위 (2대)
+run_id = {ARM}-s{SEED}          예: DYN_B-s1 — 학습 단위 (6런)
 ```
 
-**런을 차량으로 모델링하는 것이 핵심 결정이다.** 이렇게 하면:
+**팔을 차량으로 모델링하는 것이 핵심 결정이다.** 선별이 시드 독립이라(`schema/verdict.py` `vin_of`) 같은 데이터를 시드마다 올리지 않는다. 이렇게 하면:
 
 | 얻는 것 | 어떻게 |
 |---|---|
 | S3 접두사 격리 | `s3://ns-raw/vin={vin}/...` 가 자연히 갈린다 |
-| DynamoDB 파티션 분산 | `run_id` 가 파티션 키에 들어간다 |
+| DynamoDB 파티션 분산 | `vin` 이 파티션 키에 들어간다 |
 | M4 IoT 정책 검증 | 토픽 정책변수 `${iot:Connection.Thing.ThingName}` 격리를 **그대로** 시험할 수 있다 |
 | 대조 오염 방지 | 두 팔이 물리적으로 다른 접두사에 쌓인다 |
 
@@ -325,8 +335,15 @@ needslack-cloud/
 
 **웹 프레임워크는 넣지 않는다.** 판정 레코드는 stdlib `dataclass`(`schema/verdict.py`)로
 정의돼 있고, M1 의 수집기·조정기는 둘 다 MQTT 구독자라 HTTP 가 쓰일 곳이 없다.
-MinIO 버킷 알림을 MQTT 로 받는 것은 **아직 이 스택에서 확인하지 않았다** — `ingest/`
-착수 때 먼저 확인한다. 받을 수 없으면 웹훅 수신용 HTTP 가 필요해지고, 그때 다시 묻는다.
+**MinIO 버킷 알림은 MQTT 로 받는다 — 이 스택에서 확인했다.** 고정 이미지의 `notify_mqtt`
+대상을 Mosquitto(`tcp://mosquitto:1883`)로 걸고 `s3:ObjectCreated:*` 규칙을 붙이면, PUT 1건이
+S3 이벤트 형식 JSON 1건으로 도착한다. 웹훅용 HTTP 는 필요 없다. 조정기가 알아야 할 형태:
+
+- 본문의 `Records[0].s3.object.key` 는 **URL 인코딩돼 있다**(`vin%3Dsim-…`). 최상위 `Key` 는
+  `{bucket}/{key}` 원문이다.
+- `userMetadata` 에 번들 메타(`X-Amz-Meta-Vin` · `X-Amz-Meta-N-Frames` …)가 실린다.
+- 브로커가 내려가 있을 때 이벤트를 잃지 않으려면 `queue_dir` 을 지정해야 한다. 그래도
+  조정기는 이벤트만 믿지 않고 버킷 목록 대조로 보완한다.
 
 **나중에 필요해지면 묻는 것**: `duckdb`(M2 분석 질의 — DynamoDB 스캔으로 부족할 때).
 
