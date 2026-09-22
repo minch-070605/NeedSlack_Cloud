@@ -220,8 +220,8 @@ def milestones(runs: Optional[dict] = None) -> list[dict]:
         ]},
         {"m": "M3", "goal": "두 팔 × 3시드 재현 — 결론", "steps": [
             ("Colab 노트북", ex("pipelines", "colab_train.ipynb")),
-            ("6런 학습·평가", ex("data", "m3", "m3_eval.json")),     # Colab 이 낸 결과를 내려받았다
-            ("Δ 대조표", ex("pipelines", "compare.py")),
+            ("6런 학습·평가", ex("data", "m3", "m3_eval.json") or ex("data", "m3_results", "m3_eval.json")),
+            ("Δ 대조표", ex("data", "m3", "compare.json")),        # compare.py 가 검증·등록까지 마쳤다
         ]},
         {"m": "M4", "goal": "AWS 수직 절단면", "steps": [
             ("IoT 정책", ex("infra", "aws")),
@@ -364,6 +364,73 @@ def live_section(live: Optional[dict], rep: dict, lmax: float) -> str:
     return out
 
 
+def m3_result() -> Optional[dict]:
+    """compare.py 가 검증·등록까지 마친 요약. 없으면 None."""
+    p = os.path.join(ROOT, "data", "m3", "compare.json")
+    if not os.path.exists(p):
+        return None
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def ci_plot(d: dict) -> str:
+    """두 Δ 와 95% CI 를 한 축에. 0 선이 기준이다."""
+    rows = [("파이프라인", "dyn_b", d["delta"]["pipeline"]), ("오프라인 rev.9", "idle", d["delta"]["offline"])]
+    lo = min(0.0, min(r[2]["ci"][0] for r in rows)) - 0.005
+    hi = max(r[2]["ci"][1] for r in rows) + 0.005
+    W, L, R, T, rh = 720, 130, 24, 24, 46
+    H = T + rh * len(rows) + 40
+    X = lambda v: L + (W - L - R) * (v - lo) / (hi - lo)          # noqa: E731
+    step = 0.01
+    ticks, v = "", round(lo / step) * step
+    while v <= hi + 1e-9:
+        ticks += (f'<line class="gr" x1="{X(v):.1f}" x2="{X(v):.1f}" y1="{T - 8}" y2="{T + rh * len(rows)}"/>'
+                  f'<text class="tk" x="{X(v):.1f}" y="{T + rh * len(rows) + 18}" text-anchor="middle">{v:+.2f}</text>')
+        v += step
+    zero = f'<line class="zero" x1="{X(0):.1f}" x2="{X(0):.1f}" y1="{T - 12}" y2="{T + rh * len(rows)}"/>'
+    marks = ""
+    for i, (name, cls, e) in enumerate(rows):
+        y = T + rh * i + rh / 2
+        marks += (f'<text class="ci-lbl" x="{L - 12}" y="{y + 4:.1f}" text-anchor="end">{name}</text>'
+                  f'<line class="ci-{cls}" x1="{X(e["ci"][0]):.1f}" x2="{X(e["ci"][1]):.1f}" y1="{y:.1f}" y2="{y:.1f}"/>'
+                  f'<circle class="pt-{cls}" cx="{X(e["delta"]):.1f}" cy="{y:.1f}" r="6"/>'
+                  f'<text class="ci-v" x="{X(e["ci"][1]) + 8:.1f}" y="{y + 4:.1f}">{e["delta"]:+.4f} [{e["ci"][0]:+.4f}, {e["ci"][1]:+.4f}]</text>')
+    return (f'<figure class="hist"><svg viewBox="0 0 {W} {H}" role="img" aria-label="Δ mAP50 과 95% CI — 파이프라인 대 오프라인">'
+            f'{ticks}{zero}{marks}<text class="tk" x="{W - R}" y="{H - 4}" text-anchor="end">Δ mAP50 = DYN_B − STA_B</text></svg>'
+            f'<figcaption>점 = Δ(세 시드 평균의 차), 선 = 95% CI (held-out {d["n_held_out"]:,} 프레임 × 시드 부트스트랩 {d["boot"]}회). 세로 실선이 0.</figcaption></figure>')
+
+
+def m3_section(d: Optional[dict]) -> str:
+    if d is None:
+        return ('<div class="live-off"><b>아직 결과 없음.</b> Colab 이 낸 <code>m3_eval.json</code> 을 <code>data/m3/</code> 에 두고 '
+                '<code>python run.py compare</code> 를 돌리면 여기에 대조가 구워진다.</div>')
+    f = d["facts"]
+    facts = [("부호가 같다", f["same_sign"]), ("파이프라인 CI 가 0 을 배제한다", f["pipeline_ci_excludes_zero"]),
+             ("파이프라인 Δ 가 오프라인 CI 안", f["pipeline_delta_in_offline_ci"]),
+             ("오프라인 Δ 가 파이프라인 CI 안", f["offline_delta_in_pipeline_ci"]), ("두 CI 가 겹친다", f["cis_overlap"])]
+    facts_html = "".join(f'<li class="{"ok" if v else "bad"}"><span>{E(k)}</span><b class="num">{"예" if v else "아니오"}</b></li>'
+                         for k, v in facts)
+    facts_html += f'<li class="ok"><span>Δ 차이 (파이프라인 − 오프라인)</span><b class="num">{f["delta_diff"]:+.4f}</b></li>'
+    rows = ""
+    for a, x in d["arms"].items():
+        p, o = x["pipeline"], x["offline"]
+        rows += (f'<tr><th class="{a.lower()}">{a}</th>'
+                 + "".join(f'<td class="num">{v:.4f}<span class="unit"> ({dv:+.4f})</span></td>'
+                           for v, dv in zip(p["per_seed"], x["per_seed_diff"]))
+                 + f'<td class="num"><b>{p["mean"]:.4f}</b> ± {p["sd"]:.4f}</td><td class="num">{o["mean"]:.4f} ± {o["sd"]:.4f}</td></tr>')
+    table = ('<div class="tbl-wrap"><table><thead><tr><th></th><th>시드 1</th><th>시드 2</th><th>시드 3</th>'
+             '<th>파이프라인 평균 ± sd</th><th>오프라인 평균 ± sd</th></tr></thead><tbody>' + rows + "</tbody></table></div>"
+             '<p class="lede">괄호는 같은 시드의 오프라인 값과의 차. 시드별로는 ±0.02 까지 흔들리지만(시드 잡음), 두 팔의 차 Δ 는 거의 그대로다.</p>')
+    checks = "".join(f'<li class="ok"><span>{E(k)}</span><b class="num">{E(v)}</b></li>' for k, v in d.get("checks", []))
+    env = d.get("env", {})
+    return (ci_plot(d) + table
+            + f'<div class="run pass"><div class="run-head"><span class="run-verdict">사실 — 판정이 아니다</span>'
+              f'<span class="run-meta">PRD: 숫자가 달라도 그것이 결과다</span></div><ul class="checks">{facts_html}</ul></div>'
+            + f'<div class="run pass"><div class="run-head"><span class="run-verdict">출처 검증 — 전부 통과 · 계보 {E(d.get("registered", ""))}</span>'
+              f'<span class="run-meta">{E(env.get("gpu", ""))} · ultralytics {E(env.get("ultralytics", ""))} · torch {E(env.get("torch", ""))}</span></div>'
+              f'<ul class="checks">{checks}</ul></div>')
+
+
 def render(ctx: dict) -> str:
     c, sig, rep = ctx["contract"], ctx["signals"], ctx["replay"]
     ms_html = ""
@@ -431,6 +498,7 @@ def render(ctx: dict) -> str:
         head_commit=E(ctx["log"][0][0]), t_ok=t_ok, t_run=t_run,
         milestones=ms_html, todo_head=md_inline(ctx["todo_head"]), todo=todo, questions=questions,
         live=live_section(live, rep, c.max_arrival_latency_s), live_where=live_where,
+        m3=m3_section(ctx.get("m3")),
         tiles=tile_bar("STA_B", sig["arms"]["STA_B"]["tile_hist"], sig["arms"]["STA_B"]["mean_tiles"])
         + tile_bar("DYN_B", sig["arms"]["DYN_B"]["tile_hist"], sig["arms"]["DYN_B"]["mean_tiles"]),
         c_tile=f"{sig['operating_point']['c_tile_ms']:.2f}", budget=n0(sig["operating_point"]["budget"]),
@@ -600,6 +668,11 @@ svg .gr{{stroke:var(--rule);stroke-width:1}}svg .ax{{stroke:var(--muted);stroke-
 svg .hb.dyn_b{{fill:var(--dyn)}}svg .hb.sta_b{{fill:var(--sta)}}
 svg .mk{{stroke:var(--ink);stroke-width:1.2;stroke-dasharray:3 3}}
 svg .mk-t{{font-size:12px;font-weight:600}}
+svg .zero{{stroke:var(--ink);stroke-width:1.5}}
+svg .ci-dyn_b{{stroke:var(--dyn);stroke-width:4;stroke-linecap:round}}svg .ci-idle{{stroke:var(--idle);stroke-width:4;stroke-linecap:round}}
+svg .pt-dyn_b{{fill:var(--dyn);stroke:var(--surface);stroke-width:2}}svg .pt-idle{{fill:var(--muted);stroke:var(--surface);stroke-width:2}}
+svg .ci-lbl{{font-size:13px;font-weight:600}}svg .ci-v{{font-size:12px;font-family:var(--mono);fill:var(--muted)}}
+th.sta_b{{color:var(--sta)}}th.dyn_b{{color:var(--dyn)}}
 /* 로그 */
 .log{{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}}
 .log li{{display:grid;grid-template-columns:72px 92px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px}}
@@ -626,6 +699,13 @@ svg .mk-t{{font-size:12px;font-weight:600}}
   <div class="ms-grid">{milestones}</div>
   <div class="next"><h3>먼저 — {todo_head}</h3><ol>{todo}</ol></div>
   {questions}
+</section>
+
+<section>
+  <h2>M3 결과 — 파이프라인을 지나온 Δ</h2>
+  <p class="lede">두 팔 × 3시드를 Colab 에서 재학습해 held-out 에서 잰 값과, rev.9 오프라인 값(<code>eval_axis2_mc.json</code>)을 나란히 놓았다.
+  <code>compare.py</code> 가 출처(데이터 · 코드 · 인자)를 검증하고 계보에 등록한 결과를 굽는다.</p>
+  {m3}
 </section>
 
 <section>
@@ -703,7 +783,7 @@ def main(argv: list[str]) -> int:
     print("운영 테이블 " + ("읽음" if live else "없음 — 스택 내려감"), flush=True)
     ctx = {
         "position": pos, "todo_head": todo_head, "todo": todo, "questions": open_questions(),
-        "live": live, "contract": load_contract(), "signals": sig, "replay": rep,
+        "live": live, "contract": load_contract(), "signals": sig, "replay": rep, "m3": m3_result(),
         "sizes": payload_sizes(sig["pool_frame"]), "log": git_log(), "tests": test_count(),
         "milestones": milestones({a: arm_complete(live, rep, a) for a in V.ARMS}),
     }

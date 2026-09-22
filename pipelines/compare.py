@@ -39,7 +39,9 @@ for _p in (_HERE, os.path.join(ROOT, "edge-agent"), os.path.join(ROOT, "schema")
 
 import verdict as V         # noqa: E402
 
-IN_DEFAULT = os.path.join(ROOT, "data", "m3", "m3_eval.json")
+#: Colab 결과를 내려받는 자리. 폴더째(`m3_results/`) 내려받아도 찾는다
+IN_CANDIDATES = (os.path.join(ROOT, "data", "m3", "m3_eval.json"),
+                 os.path.join(ROOT, "data", "m3_results", "m3_eval.json"))
 OUT_DEFAULT = os.path.join(ROOT, "data", "m3", "compare.json")
 RUNS = tuple(V.run_id(a, s) for a in V.ARMS for s in V.SEEDS)
 #: 고정 인자 — 노트북 train.json 의 train_args(문자열 값)와 대조한다. 출처: rev.9 axis2 _mc args.yaml
@@ -208,8 +210,9 @@ def local_expectations() -> tuple[dict[str, str], str, int, dict[str, str]]:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="M3 결과 검증 · 계보 등록 · 오프라인 대조")
-    ap.add_argument("path", nargs="?", default=IN_DEFAULT)
+    ap.add_argument("path", nargs="?", default=None)
     a = ap.parse_args(argv)
+    a.path = a.path or next((p for p in IN_CANDIDATES if os.path.exists(p)), IN_CANDIDATES[0])
     if not os.path.exists(a.path):
         raise SystemExit(f"{a.path} 가 없다 — Colab 의 m3_results/m3_eval.json 을 내려받아 둔다")
     with open(a.path, encoding="utf-8") as f:
