@@ -660,7 +660,7 @@ svg .mk-t{{font-size:12px;font-weight:600}}
     <div><h3>한 팔 완주 — 터미널 셋</h3>
       <pre>python run.py collect
 python run.py reconcile
-python run.py replay STA_B</pre>
+python run.py replay DYN_B</pre>
       <p>수집기·조정기는 Ctrl+C 로 멈춘다. 꺼져 있던 동안의 메시지는 브로커 세션이 보관한다.
       <code>replay … --dry-run</code> 은 스택 없이 계약만 돈다(약 5초).</p></div>
     <div><h3>이 페이지 다시 굽기</h3>
