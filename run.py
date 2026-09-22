@@ -21,6 +21,8 @@
                M3 결과 검증 · 계보 등록 · 오프라인 대조       pipelines/compare.py
     status [출력경로]
                진행 현황 페이지를 산출물에서 굽는다          docs/build_status.py
+    primer m2|m3
+               마일스톤 입문 페이지를 굽는다                 docs/build_primer.py
     guide [출력경로]
                도메인 입문 페이지를 굽는다                   docs/build_guide.py
 
@@ -144,6 +146,10 @@ def cmd_status(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "docs", "build_status.py"), *args])
 
 
+def cmd_primer(*args: str) -> int:
+    return _run([sys.executable, os.path.join(ROOT, "docs", "build_primer.py"), *args])
+
+
 def cmd_guide(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "docs", "build_guide.py"), *args])
 
@@ -151,10 +157,10 @@ def cmd_guide(*args: str) -> int:
 COMMANDS = {
     "check": cmd_check, "up": cmd_up, "down": cmd_down,
     "bootstrap": cmd_bootstrap, "test": cmd_test, "contract": cmd_contract,
-    "replay": cmd_replay, "collect": cmd_collect, "reconcile": cmd_reconcile, "snapshot": cmd_snapshot, "notebook": cmd_notebook, "compare": cmd_compare, "status": cmd_status, "guide": cmd_guide,
+    "replay": cmd_replay, "collect": cmd_collect, "reconcile": cmd_reconcile, "snapshot": cmd_snapshot, "notebook": cmd_notebook, "compare": cmd_compare, "status": cmd_status, "primer": cmd_primer, "guide": cmd_guide,
 }
 #: 인자를 받는 명령
-TAKES_ARGS = {"replay", "collect", "reconcile", "snapshot", "compare", "status", "guide"}
+TAKES_ARGS = {"replay", "collect", "reconcile", "snapshot", "compare", "status", "primer", "guide"}
 
 
 def main(argv: list[str]) -> int:
