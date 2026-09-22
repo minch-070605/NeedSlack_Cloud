@@ -325,6 +325,7 @@ needslack-cloud/
 ├ ingest/
 │   ├ store.py                    키 규약 · 상태 전이 (DynamoTable · MemoryTable)
 │   ├ collector.py                판정·텔레메트리 MQTT → DynamoDB
+│   ├ subscriber.py               공통 구독 루프 (영속 세션 · 수동 PUBACK · 작업 스레드)
 │   └ reconciler.py               S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED
 ├ pipelines/
 │   ├ snapshot.py                 DynamoDB → manifest.jsonl + PG
@@ -372,7 +373,9 @@ needslack-cloud/
   `{bucket}/{key}` 원문이다.
 - **브로커가 내려가 있는 동안의 PUT 도 잃지 않는다** — `queue_dir` 에 쌓였다가 재접속 후
   전달된다. 단, 받는 쪽이 **영속 세션**(`clean_session=False` · 고정 client_id · QoS 1)이어야
-  조정기가 꺼져 있던 동안의 이벤트를 브로커가 보관한다. 그래도 조정기는 이벤트만 믿지 않고
+  조정기가 꺼져 있던 동안의 이벤트를 브로커가 보관한다. 처리는 paho 네트워크 스레드가 아니라
+  **작업 스레드**에서 한다 — 콜백 안에서 오래 처리하면 keepalive 응답을 못 읽어 연결이 끊긴다
+  (`ingest/subscriber.py` 머리말). 그래도 조정기는 이벤트만 믿지 않고
   버킷 목록 대조로 보완한다.
 
 **나중에 필요해지면 묻는 것**: `duckdb`(M2 분석 질의 — DynamoDB 스캔으로 부족할 때).

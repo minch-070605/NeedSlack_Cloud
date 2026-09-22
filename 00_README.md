@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M1 진행 중 — 재생기·수집기·조정기 완료(M1-2~5). 다음은 DYN_B 완주(M1-6)**
+최종 갱신 **2026-09-22** · **현재 위치: M1 완료 — DYN_B 가 운영 파이프라인을 끝까지 통과(2,449 판정 전부 INDEXED). 다음은 STA_B 완주**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 > 도커 스택은 세션 사이에 내려 둔다 — 이어서 스택이 필요하면 Docker Desktop 을 켜고 `python run.py up`.
@@ -103,13 +103,15 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `infra/bootstrap/00_check.ps1` | 환경 점검 (WSL · Docker Desktop · 엔진). **UTF-8 BOM 필수** — §5 | ✅ 통과 |
 | `infra/bootstrap/01_create.py` | 버킷·버킷 알림 규칙·테이블·스키마 생성. **2회 실행으로 멱등 확인** | ✅ 실행 |
 | `ingest/store.py` | **키 규약·상태 전이의 단일 구현.** `DynamoTable`(실제) · `MemoryTable`(테스트) 두 구현 위에 선다 | ✅ |
-| `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED. 영속 세션·수동 PUBACK. 라이브 점검 통과(§4) | ✅ |
+| `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED | ✅ M1 완주 |
+| `ingest/subscriber.py` | 수집기·조정기 공통 구독 루프 — 영속 세션 · 수동 PUBACK · **처리는 작업 스레드**(§5 함정) | ✅ |
 | `tests/` | **84건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초) | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
 | `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` `replay` `collect` `reconcile` `status` `guide` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
 | `.venv/` · `.env` | 전용 파이썬 3.12.10 환경 · 로컬 환경값 (둘 다 커밋 안 됨) | ✅ |
-| `ingest/reconciler.py` | **조정기** — S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED / QUARANTINED. 라이브 점검 통과(§4) | ✅ |
+| `ingest/reconciler.py` | **조정기** — S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED / QUARANTINED | ✅ M1 완주 |
+| 운영 테이블·버킷 | `ns-curation-index` · `ns-raw-payload` 에 **DYN_B 1회분**(판정 2,449 · 번들 70 · 502.1 MB). STA_B 는 아직 없음 | ✅ DYN_B |
 | `pipelines/` | M2~M4 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
@@ -178,6 +180,22 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | 도착 지연 최대 (번들 PUT 기준) | 3,106 s | 2,801 s |
 | 모의시간 주행 + 주차 배출 | 1,224.5 + 3,100 s | 1,224.5 + 2,795 s |
 
+### M1 완주 실측 — DYN_B, 운영 테이블 (2026-09-22)
+
+수집기·조정기를 켠 채 `python run.py replay DYN_B`(12.5배속). 전부 **재생 보고와 일치**했다.
+
+| 항목 | 운영 테이블·버킷 | 재생 보고 |
+|---|---|---|
+| 판정 | 2,449 전부 **INDEXED** · QUARANTINED 0 · PENDING/UPLOADED 0 | 수락 2,449 |
+| 번들 | 70 전부 도착 기록 · 번들마다 판정 수 = `n-frames` | 70 |
+| S3 | 객체 70 · 502.1 MB | 502.1 MB |
+| 도착 지연 `arrival_latency_s` | 최대 2,801.4 s · 중앙값 369.9 s · 최소 5.8 s | 번들 기준 최대 2,801 s |
+| 텔레메트리 | 14 (final 1) | 14 |
+| 벽시계 | 재생 323 s · 전부 INDEXED 까지 609 s | — |
+
+> 이 런에서 조정기가 120 s 마다 MQTT 재연결했다(이벤트 74 = 번들 70 + 재전송 4, 멱등이라 결과 무해).
+> 원인과 수정은 §5 함정 표. 수정 뒤 191 s 적체 처리에서 끊김 0 을 임시 자원으로 확인했다.
+
 > **발견 — rev.9 `frames.bin` 의 `conf_q8`·`det_count` 가 interim 현재본과 다르다**
 > (pool 기준 불일치 conf_q8 24,274 · det_count 19,188 / 24,491. mean_p·kinematic_u8 은 0).
 > 판정에는 보드 레코드(frames.bin)를 싣는다. need_profile 이 `w_conf = 0` 이라 value_score 는
@@ -188,47 +206,32 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — M1 완주 (M1-6)
+### 🔴 먼저 — STA_B 완주
 
-운영 테이블·버킷으로 DYN_B 를 한 번 끝까지 통과시킨다. 준비:
+두 팔을 **모두** 파이프라인에 태워야 대조가 산다(`CLAUDE.md §1`). DYN_B 와 같은 절차·같은 설정으로 한 번.
+
+1. `python run.py collect` · `python run.py reconcile` · `python run.py replay STA_B` (터미널 셋, 12.5배속이면 약 5.4 분 + 조정 약 5 분)
+2. 완료 판정 — 판정 2,449 전부 INDEXED · QUARANTINED 0 · 번들 70 도착 · 도착 지연 최대 = 재생 보고. `python run.py status` 가 운영 테이블을 읽어 ✓/✗ 로 보여 준다
 
 ```bash
-python run.py up          # 스택 기동 (healthy 까지 기다림)
+python run.py up          # 스택 기동 (healthy 까지 기다림) — 볼륨에 DYN_B 가 남아 있다
 python run.py bootstrap   # 버킷·버킷 알림·테이블·스키마 (멱등)
-python run.py test        # 단위 테스트
-python run.py replay DYN_B --dry-run   # 재생기 — 스택 없이 계약만 (약 5초)
+python run.py test        # 단위 테스트 (스택이 떠 있으면 DynamoDB 대조 포함, 약 50 초)
 ```
 
-그다음 터미널 셋:
+### 🟡 열린 질문 — 사람이 정할 것
 
-```bash
-python run.py collect                          # 수집기 (Ctrl+C 로 멈춤)
-python run.py reconcile                        # 조정기 (Ctrl+C 로 멈춤)
-python run.py replay DYN_B                     # REPLAY_SPEED=12.5 면 약 5.4 분
-```
-
-**완료 판정**: 판정 2,449 건이 전부 INDEXED · QUARANTINED 0 · `arrival_latency_s` 최대가 재생 보고의
-"번들 기준 도착지연 최대"와 같다. 이것이 **M1 완료**다.
-
-> 처리 속도 (추정 — 호출 수 × 실측 76 ms). DynamoDB Local 은 호출당 약 76 ms(PutItem 100건 7.6 s)다.
-> 수집기는 약 3,200 호출(판정 2,449 + 번들 갱신 약 730)이라 12.5배속 재생을 따라간다.
-> 조정기는 번들당 약 106 호출(도착 1 · 승격 35 · 조회 35 · 검증 35) × 70 번들 ≈ 7,400 호출이라
-> **재생보다 수 분 늦게 끝난다** — 밀린 이벤트는 브로커 세션에 쌓일 뿐 잃지 않는다.
-
-`ingest/` 라이브 점검 결과. 임시 테이블·버킷·세션을 쓰고 끝난 뒤 지웠다. 입력은 DYN_B 앞 3,000 후보 · 12.5배속이고, 모든 경우가 재생 보고와 일치했다:
-
-| 경우 | 결과 |
-|---|---|
-| 수집기가 꺼진 채 재생 → 나중에 기동 | 판정 147 · 메시지 84 · 텔레메트리 1 · 번들 5 전부 적재 (세션이 보관) |
-| 재생 도중 수집기 강제 종료 → 재기동 | 누적 FRAME 294 = 147 × 2 · BUNDLE 10 · TEL 2. 유실·중복 아이템 0 |
-| 수집기·조정기 기동 중 재생 | 147 전부 INDEXED |
-| 조정기가 꺼진 채 재생 → 재기동 | 누적 294 전부 INDEXED. 번들 4개는 버킷 대조가, 1개는 세션 이벤트가 처리 |
-| 도착 지연 `arrival_latency_s` | 최대 69.4 s = 재생 보고 "번들 기준 69 s" · 최소 5.8 s |
+1. **Colab 이 로컬 MinIO 에 닿지 않는다 — M3 학습 이미지를 어떻게 옮기나.** 경로가 증명되려면 학습 이미지가
+   MinIO 번들에서 꺼낸 것이어야 한다(`edge-agent/replay.py` 머리말). rev.9 는 데이터를 Google Drive 에 tar 로 올려 Colab 에서 풀었다
+   (`rev.9/08_이관/build_colab_nb.py`). 같은 방식 — M2 스냅샷이 manifest 와 번들에서 잘라 낸 JPEG 를 tar 로 묶고, 사람이 Drive 에 올린다 — 을 쓸지.
+   **M2 스냅샷 형식을 정하기 전에** 닫는다
+2. **계약 `S` 를 고칠지** — 선별분 페이로드가 계약 144,500 B 보다 STA_B +48% · DYN_B +42% 크다(§3 가정 5). 이번 규모에서는 무해하지만
+   업링크 수요 · `δ_max` · `L_max` 가 그만큼 낙관적이다. **M3 결과를 보고하기 전에** 닫는다
 
 ### 🔵 그다음 — M2 (계보 + 스냅샷)
 
-`pipelines/snapshot.py` — GSI1 `VIN#{vin}#STATE#INDEXED` → `manifest.jsonl` + PostgreSQL 계보 등록.
-그 뒤 역추적 질의(조인 1회). 보고서 §6-5 · `구현설계_MVP.md §1` M2.
+`pipelines/snapshot.py` — GSI1 `VIN#{vin}#STATE#INDEXED` → `manifest.jsonl` + PostgreSQL 계보 등록 → IN_DATASET.
+그 뒤 역추적 질의(조인 1회). 두 팔이 모두 INDEXED 여야 시작한다. 보고서 §6-5 · `구현설계_MVP.md §1` M2.
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
@@ -284,6 +287,7 @@ SageMaker Pipelines · 실차 연동 · 함대 부하시험.
 | `.ps1` 이 `TerminatorExpectedAtEndOfString` 파싱 오류 | PowerShell 5.1 이 BOM 없는 파일을 cp949 로 읽어 한글이 깨지고 따옴표 짝이 어긋난다 | 한글이 든 `.ps1` 은 **UTF-8 BOM** 으로 저장. `tests/test_scripts.py` 가 검사 |
 | 파이썬 한글 출력이 `UnicodeEncodeError` | 콘솔이 cp949 | **`PYTHONUTF8=1`** — 선택이 아니다 |
 | `wsl` 출력이 깨짐 | `wsl.exe` 가 UTF-16 으로 출력 | `$env:WSL_UTF8=1` |
+| 구독자가 정확히 120 s 마다 재연결 | paho 는 keepalive(60 s) 뒤 보낸 PINGREQ 의 응답을 다음 keepalive 까지 못 읽으면 스스로 끊는다. 콜백 안에서 번들(약 8 s)을 처리하면 응답이 밀린다 | 처리를 작업 스레드로 — `ingest/subscriber.py`. 콜백은 큐에 넣기만 한다 |
 | 수집기가 꺼진 동안 보낸 메시지가 1,000건에서 끊김 | Mosquitto `max_queued_messages` 기본 1,000 — 초과분을 **경고 없이** 버린다 | `mosquitto.conf` 에 100,000 으로 반영됨 |
 | `minio/minio` pull 이 `pull access denied` | Docker Hub 저장소가 사라졌다 (로그인해도 같다) | `quay.io/minio/minio` — compose 에 반영됨 |
 | 파이프로 받은 `.ps1` 출력이 깨짐 | PowerShell 출력 인코딩이 cp949 | 스크립트에서 `[Console]::OutputEncoding` 을 UTF-8 로 |
