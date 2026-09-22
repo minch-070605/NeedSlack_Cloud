@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M3 완료 — 파이프라인을 지나온 Δ mAP50 +0.0240 [+0.0105, +0.0383] 가 오프라인 +0.0241 [+0.0115, +0.0369] 를 재현. 다음은 M4 여부 결정**
+최종 갱신 **2026-09-22** · **현재 위치: M4 완료 — 판정 평면이 실제 AWS(IoT Core · DynamoDB, 서울)를 통과하고 차량 격리가 성립, 자원은 전부 철거. M1~M4 전부 완료**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 > 도커 스택은 세션 사이에 내려 둔다 — 이어서 스택이 필요하면 Docker Desktop 을 켜고 `python run.py up`.
@@ -117,6 +117,7 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `data/snapshots/` | `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (+ `.sha256`) — 커밋하지 않는다. Drive 에 올릴 것 | ✅ 1.63 GB |
 | `docs/설계결정-0002-M3-학습데이터-이관.md` | Colab 은 MinIO 에 닿지 않는다 → tar 로 묶어 Drive 로. rev.9 축 2 학습 레시피 고정 | ✅ 채택 |
 | `pipelines/colab_train.ipynb` · `build_colab_nb.py` | **M3 노트북** — tar sha256 대조 → 6런 학습 → held-out 평가 → Δ · CI → `m3_eval.json`. rev.9 학습·평가 코드를 원문 그대로 싣는다. `python run.py notebook` 이 굽는다 | ✅ Colab T4 실행 완료 |
+| `infra/aws/m4.py` · `ns-m4-admin-policy.json` | **M4** — `plan · up · check · run · down`. IAM 사용자 `ns-m4-admin`(최소 권한) 으로만 돈다. 어댑터의 `DDB_TARGET` · `MQTT_TARGET` 전환으로 같은 코드가 AWS 에 붙는다 | ✅ 구축 → 확인 → 철거 |
 | `pipelines/compare.py` | **M3 대조** — `m3_eval.json` 검증(tar sha256 · 인자 해시 6런 동일 · held-out · rev.9 코드) → `model_run` · `eval_result` 등록 → 오프라인과 시드별·Δ·CI 대조 → `data/m3/compare.json`. 판정 없이 사실만 | ✅ 등록 완료 |
 | `docs/build_primer.py` | 마일스톤 입문 페이지(`python run.py primer m2|m3`) — 진행 현황 한 판을 읽는 데 필요한 개념만 | ✅ |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
@@ -241,6 +242,23 @@ Colab T4 · ultralytics 8.4.130 · torch 2.11.0. `python run.py compare` — 출
 - 한 런 학습 약 14 분(T4, 16 epoch · 2,449 장, `train.json` 실측). 6런 82.5 분 — PRD 의 "6런 약 20 분" 추정보다 4 배 길다.
   추정 근거(rev.9 ybase 24 epoch · 4,089 장 · 5.2 분)도 T4 였으므로 GPU 차이가 아니다. 원인은 **미확인**이다.
 
+### M4 결과 — 실제 AWS 수직 절단면 (2026-09-22, 서울 리전)
+
+`python run.py m4 up → check → run → down`. IAM 사용자 `ns-m4-admin` 으로만 돌았다(루트 키면 스크립트가 멈춘다).
+
+| 확인 | 결과 |
+|---|---|
+| 차량 `sim-STA_B` 가 자기 토픽에 발행 → 수집기가 IoT Core 에서 받음 | ✓ |
+| `sim-STA_B` 가 `sim-DYN_B` 토픽에 발행 | ✓ **거부** — IoT Core 가 연결을 끊고 수집기에 오지 않음 |
+| `sim-STA_B` 인증서로 client_id=`sim-DYN_B` 접속 | ✓ **거부** |
+| Credential Provider 임시 자격으로 `vin=sim-STA_B/` 쓰기 · `vin=sim-DYN_B/` 쓰기 · 버킷 목록 | ✓ 허용 · **AccessDenied** · **AccessDenied** |
+| DYN_B 앞 3,000 후보 재생 → IoT Core → 수집기(로컬) → **AWS DynamoDB** → 조정기 → INDEXED | ✓ 147 / 147 · 49 s · 거부·끊김 0 |
+| `down` 뒤 잔여 | Thing · IoT 정책 · role alias · 인증서 · 테이블 · 역할 · 버킷 **전부 없음** |
+
+- 코드는 바꾸지 않았다 — 어댑터의 전환(`DDB_TARGET=aws` · `MQTT_TARGET=aws`)만으로 수집기·조정기·재생기가 AWS 에 붙었다(구현설계 §5-1).
+- 평면 2(사진 번들)는 설계대로 로컬 MinIO 에 남았다. 서버를 클라우드에 배포하지는 않았다 — 수집기는 이 PC 에서 IoT Core 를 구독했다.
+- 막힌 것 하나: IAM 역할 설명(Description)은 한글을 받지 않는다 → ASCII 로.
+
 > **발견 — rev.9 `frames.bin` 의 `conf_q8`·`det_count` 가 interim 현재본과 다르다**
 > (pool 기준 불일치 conf_q8 24,274 · det_count 19,188 / 24,491. mean_p·kinematic_u8 은 0).
 > 판정에는 보드 레코드(frames.bin)를 싣는다. need_profile 이 `w_conf = 0` 이라 value_score 는
@@ -251,22 +269,24 @@ Colab T4 · ultralytics 8.4.130 · torch 2.11.0. `python run.py compare` — 출
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — M4 를 할지 정한다
+### 🔴 먼저 — 사람이 할 정리
 
-쐐기(PRD)의 성공 판정은 M3 로 닫혔다. 수용 기준 7개 중 2~7 은 산출물·테스트로 성립했고, 1(`run.py run-all` 한 줄 완주)은
-명령을 만들지 않았다 — 재생·수집·조정·스냅샷·Colab 이 사람 단계(Drive 업로드)를 끼고 이어지기 때문이다.
+1. **콘솔에서 IAM 사용자 `ns-m4-admin` 과 그 액세스 키를 지운다.** AWS 자원은 `m4 down` 이 전부 지웠고, 남은 것은 이 사용자뿐이다.
+   지운 뒤 `.env` 의 `M4_AWS_*` 두 줄도 비운다
+2. 루트 계정 MFA 가 켜져 있는지 확인한다(계정 이름 → 보안 자격 증명 → MFA)
+3. 며칠 뒤 **Billing → Free Tier / Credits** 에서 사용량을 한 번 본다(IoT Core 메시지 수백 · DynamoDB 쓰기 수천 건 규모)
 
-M4(AWS 수직 절단면 — IoT 정책 · Credential Provider · S3 접두사 스코핑, 판정 평면만)는 PRD 가 쐐기 밖으로 둔 작업이다.
-**AWS 계정과 자격 증명이 필요하고**, 상시 무료 한도 안이지만 과금 가능한 서비스를 만지므로 `CLAUDE.md §4` 대로 시작 전에 확인한다.
+그다음은 데모 리허설(PRD Day 14) — 진행 현황 · 입문 페이지와 `python run.py compare` 출력이 데모 화면이다.
 
 ```bash
 python run.py status      # 운영 테이블 · M3 결과를 읽어 진행 현황을 굽는다
 python run.py compare     # M3 결과 재검증 (계보는 이미 등록 — same)
+python run.py m4 plan     # M4 를 다시 보여 줄 때 — 만들 자원 목록부터
 ```
 
 ### 🟡 열린 질문 — 사람이 정할 것
 
-1. **M4 를 진행할지** — 진행하면 AWS 계정 · 리전 · 자격 증명 보관 방식(`.env`)을 먼저 정한다. 진행하지 않으면 여기서 데모 리허설(PRD Day 14)로 간다
+없음.
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
