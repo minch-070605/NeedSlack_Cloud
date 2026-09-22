@@ -51,13 +51,25 @@ def dynamodb_client():
                         region_name=region())
 
 
-def mqtt_client(client_id: str):
+def mqtt_client(client_id: str, persistent: bool = False, on_connect=None, on_message=None):
     """연결된 MQTT 클라이언트. 네트워크 루프를 백그라운드로 돌린 채 돌려준다.
+
+    `persistent=True` 는 **구독자용**이다 — 영속 세션(`clean_session=False`)에 수동 PUBACK.
+    브로커가 이 client_id 의 구독과 미확인 QoS 1 메시지를 보관하므로, 구독자가 꺼져 있던 동안의
+    메시지와 처리 도중 죽은 메시지가 재접속 후 다시 온다. 처리를 마친 뒤 `c.ack(mid, qos)` 를
+    부르는 것은 호출자 몫이다. client_id 는 고정이어야 세션이 이어진다.
+
+    콜백은 연결 **전에** 건다 — 재접속 때 on_connect 가 구독을 다시 걸 수 있어야 한다.
 
     M1 은 Mosquitto 익명 접속이다. M4 에서 IoT Core 로 옮길 때 X.509 설정이 여기에만 들어간다.
     """
     import paho.mqtt.client as mqtt
-    c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id, clean_session=True)
+    c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id,
+                    clean_session=not persistent, manual_ack=persistent)
+    if on_connect is not None:
+        c.on_connect = on_connect
+    if on_message is not None:
+        c.on_message = on_message
     c.connect(_env("MQTT_HOST", "localhost"), int(_env("MQTT_PORT", "1883")), keepalive=60)
     c.loop_start()
     return c

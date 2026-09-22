@@ -40,7 +40,7 @@
 드롭 — 텔레메트리로 보고
 -------------------------------------------------------------------------------
 즉시 드롭된 선별 프레임은 판정을 내지 않는다(판정 스키마의 `selected ⇒ payload` 불변식을
-지킨다). 대신 텔레메트리 `dropped_frame_uuids` 로 알리고, 조정기가 DROPPED 를 기록한다.
+지킨다). 대신 텔레메트리 `dropped_frame_uuids` 로 알리고, 수집기가 DROPPED 를 기록한다.
 """
 from __future__ import annotations
 
