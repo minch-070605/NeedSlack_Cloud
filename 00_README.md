@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M2 완료 · M3 노트북 준비됨 — Drive 업로드와 Colab 실행(사람) 대기**
+최종 갱신 **2026-09-22** · **현재 위치: M3 완료 — 파이프라인을 지나온 Δ mAP50 +0.0240 [+0.0105, +0.0383] 가 오프라인 +0.0241 [+0.0115, +0.0369] 를 재현. 다음은 M4 여부 결정**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 > 도커 스택은 세션 사이에 내려 둔다 — 이어서 스택이 필요하면 Docker Desktop 을 켜고 `python run.py up`.
@@ -105,7 +105,7 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `ingest/store.py` | **키 규약·상태 전이의 단일 구현.** `DynamoTable`(실제) · `MemoryTable`(테스트) 두 구현 위에 선다 | ✅ |
 | `ingest/collector.py` | **수집기** — 판정 → `FRAME#` PENDING + 번들 색인, 텔레메트리 → `TEL#` + DROPPED | ✅ M1 완주 |
 | `ingest/subscriber.py` | 수집기·조정기 공통 구독 루프 — 영속 세션 · 수동 PUBACK · **처리는 작업 스레드**(§5 함정) | ✅ |
-| `tests/` | **110건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초). `test_lineage` 는 PostgreSQL 에서 롤백 트랜잭션으로 역추적 조인을 검사한다 | ✅ |
+| `tests/` | **113건 전부 통과** (stdlib unittest). 스택 없이 돈다. 스택이 떠 있으면 `test_store_dynamo` 가 같은 시나리오를 DynamoDB Local 에 돌려 두 구현을 대조한다(없으면 건너뜀, 약 50 초). `test_lineage` 는 PostgreSQL 에서 롤백 트랜잭션으로 역추적 조인을 검사한다 | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
 | `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` `replay` `collect` `reconcile` `status` `guide` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
@@ -113,10 +113,11 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `ingest/reconciler.py` | **조정기** — S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED / QUARANTINED | ✅ M1 완주 |
 | 운영 테이블·버킷 | `ns-curation-index` · `ns-raw-payload` 에 **두 팔 각 1회분**(판정 2,449 · 번들 70씩, 502.1 + 524.9 MB). 판정은 전부 `IN_DATASET` | ✅ 두 팔 |
 | `pipelines/snapshot.py` | **M2 스냅샷** — rev.9 선별·학습 목록 대조 → 번들에서 이미지 추출(sha256·원본 대조) → 결정적 tar · manifest · PG 계보 → `IN_DATASET`. 형식은 **설계결정-0002** | ✅ 두 팔 동결 |
+| `data/m3_results/` · `data/m3/compare.json` | Colab 결과(6런 가중치 · 매칭 · `m3_eval.json`)와 대조 요약 — 커밋하지 않는다 | ✅ |
 | `data/snapshots/` | `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (+ `.sha256`) — 커밋하지 않는다. Drive 에 올릴 것 | ✅ 1.63 GB |
 | `docs/설계결정-0002-M3-학습데이터-이관.md` | Colab 은 MinIO 에 닿지 않는다 → tar 로 묶어 Drive 로. rev.9 축 2 학습 레시피 고정 | ✅ 채택 |
-| `pipelines/colab_train.ipynb` · `build_colab_nb.py` | **M3 노트북** — tar sha256 대조 → 6런 학습 → held-out 평가 → Δ · CI → `m3_eval.json`. rev.9 학습·평가 코드를 원문 그대로 싣는다. `python run.py notebook` 이 굽는다 | ✅ 실행 대기 |
-| `pipelines/compare.py` | **M3 대조** — `m3_eval.json` 검증(tar sha256 · 인자 해시 6런 동일 · held-out · rev.9 코드) → `model_run` · `eval_result` 등록 → 오프라인과 시드별·Δ·CI 대조 → `data/m3/compare.json`. 판정 없이 사실만 | ✅ 결과 대기 |
+| `pipelines/colab_train.ipynb` · `build_colab_nb.py` | **M3 노트북** — tar sha256 대조 → 6런 학습 → held-out 평가 → Δ · CI → `m3_eval.json`. rev.9 학습·평가 코드를 원문 그대로 싣는다. `python run.py notebook` 이 굽는다 | ✅ Colab T4 실행 완료 |
+| `pipelines/compare.py` | **M3 대조** — `m3_eval.json` 검증(tar sha256 · 인자 해시 6런 동일 · held-out · rev.9 코드) → `model_run` · `eval_result` 등록 → 오프라인과 시드별·Δ·CI 대조 → `data/m3/compare.json`. 판정 없이 사실만 | ✅ 등록 완료 |
 | `docs/build_primer.py` | 마일스톤 입문 페이지(`python run.py primer m2|m3`) — 진행 현황 한 판을 읽는 데 필요한 개념만 | ✅ |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
@@ -221,6 +222,25 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 - 다시 돌려도 sha256 이 같고 계보는 `same`(동결 확인). 전체 sha256 은 `data/snapshots/*.sha256` 과 MinIO
   `ns-datasets/datasets/ds-{ARM}/snapshot.json`.
 
+### M3 결과 — 파이프라인을 지나온 Δ (2026-09-22)
+
+Colab T4 · ultralytics 8.4.130 · torch 2.11.0. `python run.py compare` — 출처 검증 6항목 전부 통과, 계보 등록.
+
+| mAP50 (held-out 2,826) | 시드 1 | 시드 2 | 시드 3 | 평균 ± sd | 오프라인 rev.9 |
+|---|---|---|---|---|---|
+| STA_B | 0.3011 | 0.3040 | 0.3070 | **0.3040** ± 0.0030 | 0.2989 ± 0.0049 |
+| DYN_B | 0.3374 | 0.3173 | 0.3294 | **0.3280** ± 0.0101 | 0.3230 ± 0.0049 |
+| **Δ (DYN − STA)** | | | | **+0.0240** [+0.0105, +0.0383] | +0.0241 [+0.0115, +0.0369] |
+
+- **재현됐다.** 부호가 같고, 파이프라인 CI 가 0 을 배제하며, 파이프라인 Δ 가 오프라인 CI 안에 있다. Δ 차이는 −0.0001.
+- 시드별로는 오프라인과 −0.0076 … +0.0200 까지 다르다 — 같은 데이터·같은 코드·같은 인자·같은 시드인데도 다르다.
+  rev.9 학습 환경(GPU·torch 버전)은 확인하지 않았으므로 원인은 **미확인**이다(환경 차이는 가능한 원인 중 하나일 뿐이다).
+  두 팔 평균이 함께 약 +0.005 올라가 **차 Δ 는 거의 그대로** 남았다 — 시드 잡음이 Δ 보다 크다는 PRD 암묵지 1 과 맞는다.
+- 6런의 학습 인자 해시가 하나(`ee8317efd8d15933`) — 팔·시드 말고 다른 것이 없었다(수용 기준 3).
+- 계보 역추적: `eval_result(DYN_B-s1) → … → dataset_frame` 조인 1회로 2,449 행(수용 기준 4).
+- 한 런 학습 약 14 분(T4, 16 epoch · 2,449 장, `train.json` 실측). 6런 82.5 분 — PRD 의 "6런 약 20 분" 추정보다 4 배 길다.
+  추정 근거(rev.9 ybase 24 epoch · 4,089 장 · 5.2 분)도 T4 였으므로 GPU 차이가 아니다. 원인은 **미확인**이다.
+
 > **발견 — rev.9 `frames.bin` 의 `conf_q8`·`det_count` 가 interim 현재본과 다르다**
 > (pool 기준 불일치 conf_q8 24,274 · det_count 19,188 / 24,491. mean_p·kinematic_u8 은 0).
 > 판정에는 보드 레코드(frames.bin)를 싣는다. need_profile 이 `w_conf = 0` 이라 value_score 는
@@ -231,24 +251,22 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ## 4. 다음 할 일
 
-### 🔴 먼저 — M3 Colab 학습 (결론)
+### 🔴 먼저 — M4 를 할지 정한다
 
-1. **사람이 할 일** — Google Drive 의 한 폴더에 네 파일을 올리고 Colab 에서 **런타임 → T4 GPU → 모두 실행**
-   - `data/snapshots/` 의 `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (합계 1.63 GB) + `pipelines/colab_train.ipynb`
-   - 세션이 끊기면 다시 "모두 실행" — 끝난 런은 건너뛴다. 학습은 T4 에서 20 분 안팎(추정 — rev.9 ybase 실측에서 환산), 평가 몇 분
-   - 끝나면 Drive `m3_results/m3_eval.json` 을 `data/m3/m3_eval.json` 으로 내려받는다
-2. **`python run.py compare`** — 준비됐다. 결과 파일을 검증하고 계보에 등록한 뒤 오프라인 `eval_axis2_mc.json` 과 대조한다.
-   CI 는 노트북이 rev.9 와 같은 절차로 계산한다 — 로컬 `.venv` 에 numpy 가 없어서다
+쐐기(PRD)의 성공 판정은 M3 로 닫혔다. 수용 기준 7개 중 2~7 은 산출물·테스트로 성립했고, 1(`run.py run-all` 한 줄 완주)은
+명령을 만들지 않았다 — 재생·수집·조정·스냅샷·Colab 이 사람 단계(Drive 업로드)를 끼고 이어지기 때문이다.
+
+M4(AWS 수직 절단면 — IoT 정책 · Credential Provider · S3 접두사 스코핑, 판정 평면만)는 PRD 가 쐐기 밖으로 둔 작업이다.
+**AWS 계정과 자격 증명이 필요하고**, 상시 무료 한도 안이지만 과금 가능한 서비스를 만지므로 `CLAUDE.md §4` 대로 시작 전에 확인한다.
 
 ```bash
-python run.py up          # 스택 기동 (healthy 까지 기다림) — 볼륨에 두 팔 · 계보가 남아 있다
-python run.py test        # 단위 테스트 (스택이 떠 있으면 DynamoDB · PG 대조 포함, 약 50 초)
-python run.py notebook    # 노트북 다시 굽기 — 스냅샷이 바뀌었을 때만
+python run.py status      # 운영 테이블 · M3 결과를 읽어 진행 현황을 굽는다
+python run.py compare     # M3 결과 재검증 (계보는 이미 등록 — same)
 ```
 
 ### 🟡 열린 질문 — 사람이 정할 것
 
-없음.
+1. **M4 를 진행할지** — 진행하면 AWS 계정 · 리전 · 자격 증명 보관 방식(`.env`)을 먼저 정한다. 진행하지 않으면 여기서 데모 리허설(PRD Day 14)로 간다
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
