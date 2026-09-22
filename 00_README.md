@@ -1,6 +1,6 @@
 # NeedSlack Cloud — 현재 상태와 다음 할 일
 
-최종 갱신 **2026-09-22** · **현재 위치: M2 완료 — 두 팔 데이터셋 동결(rev.9 선별과 프레임·바이트 단위로 일치). 다음은 M3 Colab 학습**
+최종 갱신 **2026-09-22** · **현재 위치: M2 완료 · M3 노트북 준비됨 — Drive 업로드와 Colab 실행(사람) 대기**
 
 > 세션을 이어서 시작한다면 **`CLAUDE.md` §0** 의 절차를 따른다.
 > 도커 스택은 세션 사이에 내려 둔다 — 이어서 스택이 필요하면 Docker Desktop 을 켜고 `python run.py up`.
@@ -115,7 +115,8 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `pipelines/snapshot.py` | **M2 스냅샷** — rev.9 선별·학습 목록 대조 → 번들에서 이미지 추출(sha256·원본 대조) → 결정적 tar · manifest · PG 계보 → `IN_DATASET`. 형식은 **설계결정-0002** | ✅ 두 팔 동결 |
 | `data/snapshots/` | `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (+ `.sha256`) — 커밋하지 않는다. Drive 에 올릴 것 | ✅ 1.63 GB |
 | `docs/설계결정-0002-M3-학습데이터-이관.md` | Colab 은 MinIO 에 닿지 않는다 → tar 로 묶어 Drive 로. rev.9 축 2 학습 레시피 고정 | ✅ 채택 |
-| `pipelines/` 나머지 | M3 — Colab 노트북 · 평가 · 대조표 | 🔲 **아직 없음** |
+| `pipelines/colab_train.ipynb` · `build_colab_nb.py` | **M3 노트북** — tar sha256 대조 → 6런 학습 → held-out 평가 → Δ · CI → `m3_eval.json`. rev.9 학습·평가 코드를 원문 그대로 싣는다. `python run.py notebook` 이 굽는다 | ✅ 실행 대기 |
+| `pipelines/compare.py` | M3 결과를 계보에 등록하고 오프라인과 대조 | 🔲 **아직 없음** |
 | `.git/` `.gitignore` `.gitattributes` | 저장소 (main 브랜치) | ✅ 기반선 커밋됨 |
 
 **웹 렌더링본** (Mermaid 도면이 그려집니다)
@@ -230,23 +231,27 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 ### 🔴 먼저 — M3 Colab 학습 (결론)
 
-1. **노트북 `pipelines/colab_train.ipynb`** — `rev.9/08_이관/build_colab_nb.py` 를 본떠 생성기로 만든다. Drive 의 tar 3개 → sha256 대조
-   (다르면 멈춤) → 풀기 → `ybase` 에서 fine-tune 6런(2팔 × 3시드, 설계결정-0002 §1 인자 그대로) → 런마다 가중치를 Drive 에 즉시 저장
-   (PRD 암묵지 8) → held-out 평가. 학습·평가는 Colab 에서만 돈다(로컬에 torch 없음)
-2. **사람이 할 일** — `data/snapshots/` 의 tar 3개(1.63 GB)를 Drive 에 올린다
-3. **`pipelines/compare.py`** — Colab 이 내려 준 평가 결과로 `model_run` · `eval_result` 를 등록하고, Δ mAP 와 부트스트랩 CI
-   (held-out 프레임 × 학습 시드 동시 리샘플, rev.9 y5 와 같은 정의)를 오프라인 **+0.0241 [+0.0115, +0.0369]** 와 대조한다
+1. **사람이 할 일** — Google Drive 의 한 폴더에 네 파일을 올리고 Colab 에서 **런타임 → T4 GPU → 모두 실행**
+   - `data/snapshots/` 의 `ds-STA_B.tar` · `ds-DYN_B.tar` · `eval-common.tar` (합계 1.63 GB) + `pipelines/colab_train.ipynb`
+   - 세션이 끊기면 다시 "모두 실행" — 끝난 런은 건너뛴다. 학습은 T4 에서 20 분 안팎(추정 — rev.9 ybase 실측에서 환산), 평가 몇 분
+   - 끝나면 Drive `m3_results/m3_eval.json` 을 `data/m3/m3_eval.json` 으로 내려받는다
+2. **`pipelines/compare.py`** — `m3_eval.json` 을 검증(tar sha256 = 스냅샷 · 학습 인자 해시 6런 동일 · held-out 식별자)하고
+   `model_run` · `eval_result` 를 등록한 뒤 Δ mAP 와 CI 를 오프라인 `eval_axis2_mc.json` 과 대조한다.
+   CI 는 노트북이 rev.9 와 같은 절차로 계산한다 — 로컬 `.venv` 에 numpy 가 없어서다
 
 ```bash
 python run.py up          # 스택 기동 (healthy 까지 기다림) — 볼륨에 두 팔 · 계보가 남아 있다
 python run.py test        # 단위 테스트 (스택이 떠 있으면 DynamoDB · PG 대조 포함, 약 50 초)
-python run.py status      # 운영 테이블을 읽어 팔별 완료 판정을 ✓/✗ 로 굽는다
+python run.py notebook    # 노트북 다시 굽기 — 스냅샷이 바뀌었을 때만
 ```
 
 ### 🟡 열린 질문 — 사람이 정할 것
 
-1. **계약 `S` 를 고칠지** — 선별분 페이로드가 계약 144,500 B 보다 STA_B +48% · DYN_B +42% 크다(§3 가정 5). 이번 규모에서는 무해하지만
-   업링크 수요 · `δ_max` · `L_max` 가 그만큼 낙관적이다. **M3 결과를 보고하기 전에** 닫는다
+1. **계약 `S` 를 어떻게 다룰지** — 선별분 페이로드가 계약 144,500 B 보다 STA_B +48% · DYN_B +42% 크다(§3 가정 5).
+   계약은 동결된 rev.9 `config.py` 의 스냅샷이라 **고칠 수 없다**(`CLAUDE.md §2·§7`). 권고안: 계약은 그대로 두고, 실측 `S` 로 다시 유도한
+   값(업링크 수요 3.43 / 3.28 Mbps · δ_max 7.00 / 7.32 h · L_max 17.0 / 16.7 h · Q_min 7.65 / 7.51 GB — STA_B / DYN_B)을 식과 함께 발견으로
+   병기한다. 이번 런은 어느 기준으로도 여유가 커서(큐 최대 388 MB · 도착 지연 최대 3,106 s) Δ mAP 결론에는 영향이 없다.
+   **M3 결과를 보고하기 전에** 닫는다
 
 ### 🔲 그다음 — 마일스톤 (보고서 §6-5)
 
