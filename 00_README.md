@@ -99,10 +99,10 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | `edge-agent/uplink.py` | **토큰버킷·store&forward·즉시 드롭** — 계약 집행부 | ✅ |
 | `edge-agent/replay.py` · `armsignals.py` | **차량 시뮬레이터** — pool 전량 재생 → 판정·텔레메트리(MQTT) · 번들(S3). 두 팔 dry-run 완주 · 로컬 스택 스모크 통과 | ✅ |
 | `common/aws.py` | AWS 어댑터 — boto3·paho 는 여기서만 | ✅ |
-| `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스. 이미지 **태그@다이제스트 고정** | ✅ 4개 모두 healthy |
+| `infra/docker-compose.yml` · `mosquitto.conf` | 로컬 스택 4서비스. 이미지 **태그@다이제스트 고정**. MinIO 버킷 알림 → MQTT (`queue_dir` 보관) | ✅ 4개 모두 healthy |
 | `infra/bootstrap/00_check.ps1` | 환경 점검 (WSL · Docker Desktop · 엔진). **UTF-8 BOM 필수** — §5 | ✅ 통과 |
-| `infra/bootstrap/01_create.py` | 버킷/테이블/스키마 생성. **2회 실행으로 멱등 확인** | ✅ 실행 |
-| `tests/` | **45건 전부 통과** (stdlib unittest). 재생기는 합성 입력 + MemorySink 로 스택 없이 | ✅ |
+| `infra/bootstrap/01_create.py` | 버킷·버킷 알림 규칙·테이블·스키마 생성. **2회 실행으로 멱등 확인** | ✅ 실행 |
+| `tests/` | **48건 전부 통과** (stdlib unittest). 재생기는 합성 입력 + MemorySink 로 스택 없이. compose ↔ `verdict.py` 토픽 일치 검사 포함 | ✅ |
 | `.env.example` | 환경 의존값 예시 | ✅ |
 | `run.py` | **단일 진입점** — `check` `up` `down` `bootstrap` `test` `contract` | ✅ |
 | `requirements.txt` | 승인된 의존성 — boto3 · psycopg[binary] · paho-mqtt | ✅ |
@@ -192,26 +192,20 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 
 | 조건 | 결론 | 근거 |
 |---|---|---|
-| S3 이벤트 수신 경로 | **MinIO `notify_mqtt` → Mosquitto.** HTTP 불필요 | 이 스택에서 PUT 1건 → 이벤트 1건 도착 확인. 형태는 `구현설계_MVP.md §8` |
+| S3 이벤트 수신 경로 | **MinIO `notify_mqtt` → Mosquitto.** HTTP 불필요. compose·부트스트랩에 반영 | PUT 1건 → 이벤트 1건, 브로커 정지 중 PUT 도 재전송 확인. 형태는 `구현설계_MVP.md §8` |
 | DynamoDB 적재 단위 | **`VIN#{vin}`** (팔 = 차량) | `schema/ddb_table.json` · `구현설계_MVP.md §3-1`. 속성 이름 불변이라 테이블 재생성 없음 |
 | 번들 → 판정 조회 | **`BUNDLE#{payload.key}` 아이템** (`FRAME#` 행 · `ARRIVED` 행) | 같은 곳. 와이어 형식 불변 |
 
-순서: ① 알림 설정을 코드로 굳힌다 — compose 의 MinIO 환경변수(`queue_dir` 포함) +
-부트스트랩의 버킷 알림 규칙 ② 수집기 ③ 조정기 ④ 수용 기준 5·6 테스트(멱등 · 스큐 3경우).
+순서: ① 수집기 ② 조정기(영속 세션 구독 + 버킷 목록 대조) ③ 수용 기준 5·6 테스트(멱등 · 스큐 3경우).
 
 ### 🔵 그다음 — M1 마무리
 
 1. `python run.py replay DYN_B` (실시간이면 약 67 분, `REPLAY_SPEED=12.5` 면 약 5.4 분) → 수집·조정 확인
-2. 1런 완주 확인 (**M1 완료**)
-
-> MinIO 에 지울지 사람이 정할 것이 둘 남아 있다(`CLAUDE.md §6`). 완주 재생 전에 정리한다.
-> - 스모크 번들 1개 — `ns-raw-payload/vin=sim-DYN_B/boot=854e1879-…/` (3.9 MB, 판정 25건분).
->   수집기가 없던 때라 대응 판정이 DynamoDB 에 없다.
-> - 알림 확인용 버킷 `ns-notify-probe` — 6 B 객체 1개. 알림 규칙·대상 설정은 이미 되돌렸다.
+2. DYN_B 재생 1회 완주 확인 — 판정 2,449건이 INDEXED (**M1 완료**)
 
 ```bash
 python run.py up          # 스택 기동 (healthy 까지 기다림)
-python run.py bootstrap   # 버킷·테이블·스키마 (멱등)
+python run.py bootstrap   # 버킷·버킷 알림·테이블·스키마 (멱등)
 python run.py test        # 단위 테스트
 python run.py replay DYN_B --dry-run   # 재생기 — 스택 없이 계약만 (약 5초)
 ```

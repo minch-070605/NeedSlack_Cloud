@@ -335,15 +335,19 @@ needslack-cloud/
 
 **웹 프레임워크는 넣지 않는다.** 판정 레코드는 stdlib `dataclass`(`schema/verdict.py`)로
 정의돼 있고, M1 의 수집기·조정기는 둘 다 MQTT 구독자라 HTTP 가 쓰일 곳이 없다.
-**MinIO 버킷 알림은 MQTT 로 받는다 — 이 스택에서 확인했다.** 고정 이미지의 `notify_mqtt`
-대상을 Mosquitto(`tcp://mosquitto:1883`)로 걸고 `s3:ObjectCreated:*` 규칙을 붙이면, PUT 1건이
-S3 이벤트 형식 JSON 1건으로 도착한다. 웹훅용 HTTP 는 필요 없다. 조정기가 알아야 할 형태:
+**MinIO 버킷 알림은 MQTT 로 받는다 — 이 스택에서 확인했다.** 대상은 compose 의 MinIO
+환경변수(대상 ID `NS` · QoS 1 · `queue_dir` 전용 볼륨)가, `ObjectCreated` 규칙은 부트스트랩이
+만든다. 토픽 `TOPIC_S3_EVENTS` 와 ARN 은 `schema/verdict.py` 가 단일 소스다. 웹훅용 HTTP 는
+필요 없다. 확인된 동작:
 
+- boto3 PUT 1건 → `s3:ObjectCreated:Put` 이벤트 1건. `userMetadata` 에 번들 메타
+  (`X-Amz-Meta-Vin` · `X-Amz-Meta-N-Frames` …)가 실린다.
 - 본문의 `Records[0].s3.object.key` 는 **URL 인코딩돼 있다**(`vin%3Dsim-…`). 최상위 `Key` 는
   `{bucket}/{key}` 원문이다.
-- `userMetadata` 에 번들 메타(`X-Amz-Meta-Vin` · `X-Amz-Meta-N-Frames` …)가 실린다.
-- 브로커가 내려가 있을 때 이벤트를 잃지 않으려면 `queue_dir` 을 지정해야 한다. 그래도
-  조정기는 이벤트만 믿지 않고 버킷 목록 대조로 보완한다.
+- **브로커가 내려가 있는 동안의 PUT 도 잃지 않는다** — `queue_dir` 에 쌓였다가 재접속 후
+  전달된다. 단, 받는 쪽이 **영속 세션**(`clean_session=False` · 고정 client_id · QoS 1)이어야
+  조정기가 꺼져 있던 동안의 이벤트를 브로커가 보관한다. 그래도 조정기는 이벤트만 믿지 않고
+  버킷 목록 대조로 보완한다.
 
 **나중에 필요해지면 묻는 것**: `duckdb`(M2 분석 질의 — DynamoDB 스캔으로 부족할 때).
 
