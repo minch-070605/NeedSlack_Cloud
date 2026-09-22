@@ -22,6 +22,7 @@ import ast
 import hashlib
 import json
 import os
+import pprint
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +39,12 @@ SEEDS = (1, 2, 3)
 TRAIN = {"epochs": 16, "batch": 32, "imgsz": 640, "workers": 2}
 ULTRALYTICS = "8.4.130"
 BOOT, BOOT_SEED = 400, 20260901      # rev.9 y5 의 --boot 기본값 · rng 시드
+
+
+def py(obj) -> str:
+    """노트북 **코드**에 싣는 값은 파이썬 리터럴로 쓴다. json.dumps 는 true/false/null 을 내서
+    셀 실행 때 NameError 가 난다(M3 첫 실행에서 실제로 났다). tests/test_notebook.py 가 검사한다."""
+    return pprint.pformat(obj, width=110, sort_dicts=False)
 
 
 def sha(b: bytes) -> str:
@@ -203,7 +210,7 @@ for name, want in EXPECTED.items():
     print(f'{name:18s} {got[:16]}…  ' + ('일치' if got == want else '★ 다르다'))
     if got != want:
         raise SystemExit(f'{name} 의 sha256 이 스냅샷과 다르다 — 올린 파일을 확인한다 (기대 {want})')
-""", SHAS=json.dumps(shas, indent=1))),
+""", SHAS=py(shas))),
 
         md("## 3. 풀기 · 개수 점검"),
         code(put("""
@@ -264,13 +271,13 @@ import yolo_detector as YD
 import m3_helpers as H
 YD.assert_no_autotuning(YD.LOCKED_TRAIN_ARGS, where='notebook')
 print('rev.9 코드 준비 —', ', '.join(FILES))
-""", FILES=json.dumps({
+""", FILES=repr({
             **src,
             "config.py": f"# rev.9 02_전처리/config.py 의 값 두 개 (build_colab_nb.py 가 옮김)\n"
                          f"CLASSES = {classes}\nYOLO_IMGSZ = {imgsz}\nDIR_LABELS = ''\n",
             "m3_helpers.py": "# rev.9 04_중앙AI/y5_train_eval_axis2.py 에서 원문 그대로 꺼낸 함수\n"
                              "import numpy as np\nfrom config import CLASSES\n\n\n" + helpers + "\n",
-        }, ensure_ascii=False), PROV=json.dumps(prov, indent=1))),
+        }), PROV=py(prov))),
 
         md(put("""
 ## 6. 학습 — 6런 (2팔 × 3시드)
@@ -326,7 +333,7 @@ for a, s in RUNS:
                    'weights_sha256': sha256_file(last), 'minutes': (time.time() - t0) / 60, 'env': ENV},
                   f, indent=1, ensure_ascii=False)
     print(f'{rid} 학습 {(time.time() - t0) / 60:.1f} 분 · args {h} → Drive 저장')
-""", TRAIN=json.dumps(TRAIN))),
+""", TRAIN=py(TRAIN))),
 
         md("## 7. held-out 평가 — rev.9 와 같은 AP 정의 (VOC all-points, IoU 0.5)"),
         code("""
@@ -418,7 +425,7 @@ print(f"{'Δ mAP50':10s}{e['delta']:>+14.4f}{'':8s}{oe['delta']:>+14.4f}")
 print(f"{'95% CI':10s}  [{e['ci'][0]:+.4f}, {e['ci'][1]:+.4f}]    [{oe['ci'][0]:+.4f}, {oe['ci'][1]:+.4f}]")
 print()
 print('저장', os.path.join(RESULTS, 'm3_eval.json'), '— 이 파일을 내려받아 data/m3/ 에 둔다')
-""", OFFLINE=json.dumps(off, indent=1), BOOT=str(BOOT), BSEED=str(BOOT_SEED))),
+""", OFFLINE=py(off), BOOT=str(BOOT), BSEED=str(BOOT_SEED))),
     ]
     return {"cells": cells, "metadata": {"accelerator": "GPU", "colab": {"provenance": []},
                                          "kernelspec": {"display_name": "Python 3", "name": "python3"},
