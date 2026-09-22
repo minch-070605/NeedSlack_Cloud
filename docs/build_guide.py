@@ -11,7 +11,8 @@
     schema/edge_contract.json   링크·수요·S·L_max·Q_min·δ_max·판정 지연 상한
     schema/arm_signals.json     두 팔의 타일 분포 · pool · 예산
     edge-agent/replay.py        번들 크기 · 배치 주기 · 텔레메트리 주기
-    docs/build_status.py        마일스톤 단계 완료(파일 존재로 판정)
+    docs/build_status.py        마일스톤 단계 완료 · 운영 테이블 실측(스택이 떠 있을 때)
+    ingest/                     수집기·조정기의 주기 상수 (스윕 간격)
 
 rev.9 오프라인 결과(Δ mAP)만은 JSON 산출물이 없어 README 와 같은 값을 아래 상수로 둔다.
 """
@@ -31,6 +32,7 @@ for _p in (os.path.join(ROOT, "edge-agent"), os.path.join(ROOT, "schema"), ROOT,
 
 import build_status as BS                     # noqa: E402  (마일스톤 판정 재사용)
 import replay as RP                           # noqa: E402
+import verdict as V                           # noqa: E402
 from contract import load as load_contract    # noqa: E402
 
 OUT_DEFAULT = os.path.join(ROOT, "docs", "_build", "guide.html")
@@ -92,14 +94,32 @@ def svg_daycycle(growth_Bps: float, drain_Bps: float, duty: float, qmin: float) 
 
 
 # ─────────────────────────────────────────────────────────── 조립
+def m1_proof(live, rep) -> str:
+    """운영 테이블에 실린 두 팔의 상태 — 이 경로가 실제로 돈다는 증거. 스택이 없으면 문장만."""
+    if live is None:
+        return ('<p class="lede">스택이 내려가 있어 운영 테이블을 읽지 않았다. 띄운 뒤 '
+                '<code>python run.py guide</code> 로 다시 구우면 실제 적재 상태가 여기 그려진다.</p>')
+    done = [a for a in V.ARMS if BS.arm_complete(live, rep, a)]
+    lat = {a: live["arms"][a]["latency"] for a in V.ARMS}
+    txt = " · ".join(f"{a} 판정 {live['arms'][a]['states']['INDEXED']:,}건이 INDEXED, 도착 지연 최대 "
+                     f"{lat[a][-1]:,.0f} s" for a in done)
+    return (f'<div class="funnel">{"".join(BS.funnel(a, live["arms"][a]["states"]) for a in V.ARMS)}</div>'
+            f'<p class="lede">지금 운영 테이블의 모습이다. {E(txt) if txt else "아직 끝까지 통과한 팔이 없다."}'
+            f' — 재생기가 보고한 값과 전부 일치했다(진행 현황 페이지의 완료 판정).</p>')
+
+
 def build() -> str:
     c = load_contract()
     sig = json.load(io.open(os.path.join(ROOT, "schema", "arm_signals.json"), encoding="utf-8"))
     op, arms = sig["operating_point"], sig["arms"]
     pos, todo_head, _ = BS.readme()
+    rep, live = BS.replay_all(), BS.pipeline_live()
+    runs = {a: BS.arm_complete(live, rep, a) for a in V.ARMS}
+    sys.path.insert(0, os.path.join(ROOT, "ingest"))
+    import reconciler as RC
 
     ms = ""
-    for m in BS.milestones():
+    for m in BS.milestones(runs):
         done = sum(1 for _, ok in m["steps"] if ok)
         state = "done" if done == len(m["steps"]) else ("active" if done else "idle")
         label = {"done": "완료", "active": "진행 중", "idle": "대기"}[state]
@@ -127,6 +147,9 @@ def build() -> str:
         daycycle=svg_daycycle(c.queue_growth_bps, c.link_bytes_per_s, c.max_drive_duty,
                               c.queue_min_bytes),
         roadmap=ms, c_tile=f"{op['c_tile_ms']:.2f}",
+        ingest_state=("완성" if os.path.exists(os.path.join(ROOT, "ingest", "reconciler.py")) else "다음에 만들 것"),
+        sweep_s=f"{RC.SWEEP_EVERY_S:g}",
+        m1_proof=m1_proof(live, rep),
         sta_tiles=f"{arms['STA_B']['mean_tiles']:.2f}", dyn_tiles=f"{arms['DYN_B']['mean_tiles']:.2f}",
     )
     return TEMPLATE.format(**ctx)
@@ -143,6 +166,7 @@ TEMPLATE = """<title>NeedSlack Cloud 입문</title>
   --sta:#5D7894;--dyn:#B9862C;--t1:#C9D5E1;--t2:#E3C27C;--t3:#A8741C;
   --plane-v:#2F6F8F;--plane-v-soft:#D6E7EF;--plane-p:#7A5C9A;--plane-p-soft:#E7DFF0;
   --ok:#3E7A53;--ok-soft:#DDEBDF;--warn:#A86A12;--warn-soft:#F6E6C8;--idle:#B3AA9A;
+  --crit:#A63D32;--crit-soft:#F4DCD7;--up:#7FA88C;
   --sans:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
   --serif:"Noto Serif KR","Batang",serif;--mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
 }}
@@ -152,6 +176,7 @@ TEMPLATE = """<title>NeedSlack Cloud 입문</title>
   --sta:#8EA9C6;--dyn:#DDAA4E;--t1:#3C4B5B;--t2:#9C7A35;--t3:#E0A945;
   --plane-v:#7DB9D6;--plane-v-soft:#1C3340;--plane-p:#B79BD6;--plane-p-soft:#2E2540;
   --ok:#72B58A;--ok-soft:#1E3326;--warn:#E3A94B;--warn-soft:#3A2D16;--idle:#5C554A;
+  --crit:#E07A6C;--crit-soft:#3D1F1B;--up:#4F7A5E;
 }}}}
 :root[data-theme="dark"]{{
   --ground:#161411;--surface:#1F1C18;--ink:#ECE6DA;--muted:#A49B8B;--rule:#38332C;--code:#2A2620;
@@ -159,6 +184,7 @@ TEMPLATE = """<title>NeedSlack Cloud 입문</title>
   --sta:#8EA9C6;--dyn:#DDAA4E;--t1:#3C4B5B;--t2:#9C7A35;--t3:#E0A945;
   --plane-v:#7DB9D6;--plane-v-soft:#1C3340;--plane-p:#B79BD6;--plane-p-soft:#2E2540;
   --ok:#72B58A;--ok-soft:#1E3326;--warn:#E3A94B;--warn-soft:#3A2D16;--idle:#5C554A;
+  --crit:#E07A6C;--crit-soft:#3D1F1B;--up:#4F7A5E;
 }}
 *{{box-sizing:border-box}}
 body{{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.7;
@@ -258,6 +284,32 @@ svg .dot{{fill:var(--accent)}}
 .st.pending{{background:var(--warn-soft);color:var(--warn);font-weight:500}}
 .st.ok{{background:var(--ok-soft);color:var(--ok)}}
 .st.drop{{background:var(--code);color:var(--muted);text-decoration:line-through}}
+.st.crit{{background:var(--crit-soft);color:var(--crit);font-weight:500}}
+/* 수집·조정 */
+.order{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}}
+.order .card h4{{margin:0;font-size:14.5px;font-weight:600}}
+.order ol{{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px;font-size:14px}}
+.inputs{{width:100%;border-collapse:collapse;font-size:14px;min-width:520px}}
+.inputs th,.inputs td{{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}}
+.inputs th{{color:var(--muted);font-weight:500;font-size:13px}}
+.inputs td:first-child{{font-weight:600;white-space:nowrap}}
+.tbl{{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:4px 8px}}
+.guar{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden}}
+.guar div{{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:6px}}
+.guar b{{font-size:14.5px}}.guar span{{font-size:13.5px;color:var(--muted);line-height:1.55}}
+.guar .eq{{background:var(--accent-soft)}}.guar .eq b{{color:var(--accent)}}
+.funnel{{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:18px 20px;display:flex;flex-direction:column;gap:16px}}
+.fn-row{{display:grid;grid-template-columns:64px 1fr 64px;grid-template-areas:"arm bar tot" ". legend legend";gap:6px 14px;align-items:center}}
+.fn-row .arm{{grid-area:arm}}
+.fn-bar{{grid-area:bar;display:flex;height:22px;border-radius:4px;overflow:hidden;gap:2px;background:var(--code)}}
+.fn-tot{{grid-area:tot;text-align:right;font-size:14px}}
+.fn-empty{{grid-column:2 / span 2;color:var(--muted);font-size:13.5px}}
+.fn-seg.ok,.fn-key i.ok{{background:var(--ok)}}.fn-seg.up,.fn-key i.up{{background:var(--up)}}
+.fn-seg.pend,.fn-key i.pend{{background:var(--warn)}}.fn-seg.crit,.fn-key i.crit{{background:var(--crit)}}
+.fn-seg.drop,.fn-key i.drop{{background:var(--idle)}}
+.fn-legend{{grid-area:legend;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted)}}
+.fn-key i{{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}}
+.fn-key b{{color:var(--ink);font-weight:500}}
 .formula{{font-family:var(--mono);font-size:14px;background:var(--code);padding:12px 14px;border-radius:5px;overflow-x:auto;white-space:nowrap}}
 .pull{{border-left:3px solid var(--accent);padding:2px 0 2px 16px}}
 /* 로드맵 */
@@ -279,6 +331,7 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
 @media (max-width:560px){{
   .tile-row{{grid-template-columns:56px 1fr;grid-template-areas:"arm bar" "mean mean" "legend legend"}}
   .rm{{grid-template-columns:44px 1fr}}.rm-state{{grid-column:2}}
+  .fn-row{{grid-template-columns:56px 1fr;grid-template-areas:"arm bar" "tot tot" "legend legend"}}.fn-tot{{text-align:left}}
 }}
 </style>
 <div class="wrap">
@@ -328,13 +381,13 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
       <div class="arrow">→</div>
       <div class="node v"><b>Mosquitto</b>메시지 중계소<small>실제 서비스: AWS IoT Core</small></div>
       <div class="arrow">→</div>
-      <div class="node v"><b>수집기 → DynamoDB</b>사진별 상태 장부<small>다음에 만들 것</small></div>
+      <div class="node v"><b>수집기 → DynamoDB</b>사진별 상태 장부<small>{ingest_state} · 판정 → PENDING</small></div>
       <div class="arrow">→</div>
       <div class="node p"><b>사진 {bundle}장 묶음</b>업링크 큐를 거쳐 늦게<small>최대 {lmax_h} h 지연</small></div>
       <div class="arrow">→</div>
       <div class="node p"><b>MinIO</b>파일 창고<small>실제 서비스: Amazon S3</small></div>
       <div class="arrow">→</div>
-      <div class="node p"><b>조정기</b>메모와 사진의 짝 맞춤<small>다음에 만들 것</small></div>
+      <div class="node p"><b>조정기</b>메모와 사진의 짝 맞춤<small>{ingest_state} · 체크섬 → INDEXED</small></div>
     </div>
     <div class="flow-tail">
       <div class="node"><b>데이터셋 동결</b>PostgreSQL 에 계보 기록</div><div class="arrow">→</div>
@@ -368,7 +421,10 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
     <div class="entry"><div class="entry-head"><h3>DynamoDB Local</h3><span class="plane n">클라우드 장부</span></div>
       <p class="what">택배 운송장 조회 시스템 같은 <strong>빠른 키-값 장부</strong>.</p>
       <dl><dt>무엇</dt><dd>사진 한 장마다 상태(골랐음 · 도착 · 검증)를 대량으로 빠르게 기록·조회.</dd>
-      <dt>대신하는 것</dt><dd>Amazon DynamoDB</dd></dl></div>
+      <dt>대신하는 것</dt><dd>Amazon DynamoDB</dd>
+      <dt>여기서</dt><dd>테이블 하나에 세 종류를 담는다 — 사진 <code>FRAME#</code>, 묶음 <code>BUNDLE#</code>, 집계 <code>VIN#…/TEL#</code>.
+      "이 차의 INDEXED 전부"처럼 상태로 찾는 길은 보조 색인 <strong>GSI1</strong> 이 낸다.</dd>
+      <dt>주의</dt><dd>로컬판은 호출 한 번에 약 76 ms 로 느리다. 결과는 같고 시간만 더 든다.</dd></dl></div>
     <div class="entry"><div class="entry-head"><h3>PostgreSQL</h3><span class="plane n">클라우드 장부</span></div>
       <p class="what">관계를 정확히 따지는 <strong>회계 장부</strong>.</p>
       <dl><dt>무엇</dt><dd>"어느 데이터셋으로 어느 모델을 만들어 몇 점이 나왔나"의 계보. 점수 하나에서 사진 한 장까지 조인 한 번으로 거슬러 올라간다.</dd>
@@ -402,9 +458,13 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
   <div class="concept">
     <div class="text"><h3>③ PENDING 은 정상이다</h3>
     <p>판정은 먼저, 사진은 몇 시간 뒤에 온다. 그래서 클라우드 기록은 대부분 한동안 <strong>사진 대기(PENDING)</strong>에 머문다.
-    이걸 오류로 경보하면 운영이 마비된다. 상태는 한 방향으로만 간다. <strong>조정기</strong>가 메모와 사진의 짝을 맞춰 상태를 옮긴다.</p></div>
+    이걸 오류로 경보하면 운영이 마비된다. 상태는 <strong>한 방향으로만</strong> 간다 — 되돌아가는 전이는 코드가 거부한다.</p>
+    <p>누가 옮기나: 판정이 오면 <strong>수집기</strong>가 PENDING 으로 적는다. 사진 묶음이 오면 <strong>조정기</strong>가 UPLOADED 로 옮기고,
+    사진을 잘라 지문(sha256)을 대조해 INDEXED 로 올린다. 지문이 다르면 QUARANTINED 로 격리한다.</p></div>
     <div class="fig"><div class="states"><span class="st pending">PENDING</span>→<span class="st ok">UPLOADED</span>→<span class="st ok">INDEXED</span>→<span class="st ok">IN_DATASET</span></div>
-      <div class="states" style="margin-top:10px"><span class="st pending">PENDING</span>→<span class="st drop">DROPPED</span><span style="color:var(--muted);font-size:13px">큐가 넘쳐 버려짐 — 텔레메트리로 보고</span></div></div>
+      <div class="states" style="margin-top:10px"><span class="st ok">UPLOADED</span>→<span class="st crit">QUARANTINED</span><span style="color:var(--muted);font-size:13px">지문 불일치 · 범위 초과 — 학습에 넣지 않는다</span></div>
+      <div class="states" style="margin-top:10px"><span class="st pending">PENDING</span>→<span class="st drop">DROPPED</span><span style="color:var(--muted);font-size:13px">큐가 넘쳐 버려짐 — 텔레메트리로 보고</span></div>
+      <div class="states" style="margin-top:14px;font-size:12.5px;color:var(--muted)">IN_DATASET 은 M2 스냅샷이 옮긴다.</div></div>
   </div>
 
   <div class="concept">
@@ -424,7 +484,76 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
 </section>
 
 <section>
-  <div class="sec-head"><span class="sec-n">5</span><h2>로드맵 — 어디까지 왔나</h2></div>
+  <div class="sec-head"><span class="sec-n">5</span><h2>수집과 조정 — 장부가 맞춰지는 법</h2></div>
+  <p class="lede prose">판정과 사진이 따로, 늦게, 때로는 두 번 도착한다. 그래도 장부에는 사진마다 정확히 한 줄이 남고
+  끝내 INDEXED 에 닿아야 한다. M1 에서 만든 수집기와 조정기가 이것을 어떻게 지키는지가 지금 진행 현황을 읽는 열쇠다.</p>
+
+  <div class="concept full">
+    <div class="text prose"><h3>⑥ "최소 한 번 배달" + "여러 번 해도 같다" = 결과는 한 번</h3>
+    <p>MQTT 는 메시지를 잃지 않는 대신 <strong>두 번 보낼 수 있다</strong>. 그래서 받는 쪽이 두 가지를 한다.
+    처리를 <strong>다 마친 뒤에만</strong> "받았다(PUBACK)"를 보낸다 — 도중에 죽으면 브로커가 다시 보낸다.
+    그리고 장부 쓰기를 <strong>멱등</strong>하게 만든다 — 같은 판정이 또 오면 "이미 있으면 쓰지 않는다(조건부 쓰기)"가 막는다.</p>
+    <p>받는 쪽이 꺼져 있어도 메시지는 사라지지 않는다. 수집기·조정기는 고정 이름의 <strong>영속 세션</strong>으로 구독하고,
+    브로커가 그 이름 앞으로 온 메시지를 보관했다가 다시 켜지면 넘긴다.</p></div>
+    <div class="guar">
+      <div><b>QoS 1</b><span>잃지 않는다. 대신 중복이 올 수 있다.</span></div>
+      <div><b>영속 세션</b><span>구독자가 꺼져 있던 동안의 메시지를 브로커가 보관한다. 기본 한도 1,000건을 넘으면 경고 없이 버려서 100,000 으로 올렸다.</span></div>
+      <div><b>수동 확인</b><span>처리를 마친 메시지만 PUBACK. 저장소가 실패하면 확인하지 않고 멈춘다 → 재시작 때 다시 온다.</span></div>
+      <div><b>조건부 쓰기 · 집합 ADD</b><span>같은 것이 여러 번 와도 장부는 한 번 쓴 것과 같다.</span></div>
+      <div class="eq"><b>= 정확히 한 번의 결과</b><span>배달은 여러 번일 수 있어도, 장부에 남는 결과는 한 번이다.</span></div>
+    </div>
+  </div>
+
+  <div class="concept full">
+    <div class="text prose"><h3>⑦ 판정과 사진, 어느 쪽이 먼저 와도 된다</h3>
+    <p>보통은 판정이 먼저 온다. 하지만 재전송·재시작이 섞이면 사진 묶음이 먼저 올 수도 있다. 둘은 <strong>묶음마다 한 줄</strong>
+    (<code>BUNDLE#</code>)에서 만난다. 수집기는 거기에 "이 묶음에 든 판정 목록"을 보태고, 조정기는 "도착했다"를 적는다.
+    둘 다 쓴 직후의 한 줄 전체를 돌려받기 때문에, <strong>나중에 온 쪽이 반드시 먼저 온 쪽의 기록을 본다</strong>.</p></div>
+    <div class="order">
+      <div class="card"><h4>판정이 먼저 (보통)</h4><ol>
+        <li>수집기: 판정을 PENDING 으로 적고, 묶음 줄에 판정 번호를 보탠다 — 아직 "도착" 표시가 없다.</li>
+        <li>조정기: 묶음이 오면 "도착"을 적고, 돌려받은 판정 번호 전부를 UPLOADED → 지문 대조 → INDEXED.</li></ol></div>
+      <div class="card"><h4>사진이 먼저</h4><ol>
+        <li>조정기: "도착"을 적는다 — 판정 번호가 아직 없어 할 일이 없다.</li>
+        <li>수집기: 판정 번호를 보태며 "도착" 표시를 본다 → 자기 판정을 바로 UPLOADED.</li>
+        <li>조정기의 <strong>스윕</strong>이 UPLOADED 로 남은 것을 찾아 지문을 대조한다(⑧).</li></ol></div>
+      <div class="card"><h4>사진이 끝내 안 온다</h4><ol>
+        <li>판정은 PENDING 으로 남는다. 이것이 정상이다(③).</li>
+        <li>알람 기준은 도착 지연 상한 L_max 의 1.5배를 넘겼을 때다 — 오래 머문 것 자체가 아니다.</li></ol></div>
+    </div>
+  </div>
+
+  <div class="concept full">
+    <div class="text prose"><h3>⑧ 조정기는 세 군데서 일을 받는다</h3>
+    <p>"사진이 도착했다"는 소식(버킷 알림)만 믿으면, 소식이 빠지는 순간 그 사진은 영영 PENDING 에 남는다. 그래서 소식 말고도 두 길을 더 둔다.</p></div>
+    <div class="tbl"><table class="inputs"><thead><tr><th>입력</th><th>언제</th><th>메우는 틈</th></tr></thead><tbody>
+      <tr><td>버킷 알림</td><td>묶음이 올라올 때마다 — MinIO 가 MQTT 로 알린다</td><td>주 경로</td></tr>
+      <tr><td>버킷 대조</td><td>조정기가 켜질 때 한 번</td><td>조정기가 없던 동안 올라온 묶음 · 잃어버린 알림</td></tr>
+      <tr><td>UPLOADED 스윕</td><td>{sweep_s} 초마다</td><td>사진이 먼저 와서 수집기가 UPLOADED 로만 옮겨 둔 판정 · 검증 도중 죽은 경우</td></tr>
+    </tbody></table></div>
+  </div>
+
+  <div class="concept">
+    <div class="text"><h3>⑨ 지문 대조 — 사진이 정말 그 사진인가</h3>
+    <p>판정은 차를 떠날 때 이미 "묶음 안 몇 번째 바이트부터 몇 바이트, 지문(sha256)은 이것"을 들고 있다. 조정기는 묶음을 한 번 받아
+    그 구간을 잘라 지문을 다시 계산한다. 같으면 INDEXED, 다르거나 범위를 넘으면 QUARANTINED — 망가진 사진이 학습에 섞이지 않는다.
+    묶음의 경로 앞머리(<code>vin=…/</code>)가 가리키는 차와 첨부 정보의 차가 다르면 그 소식 자체를 버린다 — 한 차가 남의 사진을 올릴 수 없게.</p></div>
+    <div class="fig"><div class="formula">sha256( 묶음[ offset : offset + length ] ) == 판정.payload.sha256</div></div>
+  </div>
+
+  <div class="concept">
+    <div class="text"><h3>⑩ 시계가 둘이다</h3>
+    <p>재생은 12.5배속으로 돌 수 있다. 그래서 차가 적은 시각은 <strong>차량 시계</strong>(모의 시각)이고, 클라우드가 받은 시각은 <strong>벽시계</strong>다.
+    도착 지연은 반드시 차량 시계끼리 뺀다 — 벽시계로 재면 가속 재생에서 12.5배 짧게 나온다. 장부의 <code>arrival_latency_s</code> 가 그 값이고,
+    재생기가 스스로 잰 최대값과 같아야 한다.</p></div>
+    <div class="fig"><div class="formula">arrival_latency_s = t_put_utc (묶음 업로드, 차량 시계) − t_frame_utc (사진, 차량 시계)</div></div>
+  </div>
+
+  {m1_proof}
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-n">6</span><h2>로드맵 — 어디까지 왔나</h2></div>
   <p class="lede">단계 완료는 산출물 파일이 저장소에 있는지로 판정했다. 지금 먼저 할 일: {todo_head}.</p>
   <ul class="roadmap">{roadmap}</ul>
   <p class="pull prose"><strong>M3 이 이 프로젝트의 답이다.</strong> 숫자가 오프라인과 달라도 실패가 아니다 — 어느 단계가 차이를 흐리는지 드러나는 것 자체가
@@ -432,7 +561,7 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
 </section>
 
 <section>
-  <div class="sec-head"><span class="sec-n">6</span><h2>용어</h2></div>
+  <div class="sec-head"><span class="sec-n">7</span><h2>용어</h2></div>
   <div class="gloss">
     <div><b>엣지 · 엣지 가속기</b><span>데이터가 생기는 현장(차) 쪽. 거기서 도는 전용 칩.</span></div>
     <div><b>슬랙</b><span>본업(주행 AI)이 끝나고 다음 프레임까지 남는 시간. 채점은 이 틈에만 한다.</span></div>
@@ -446,6 +575,16 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
     <div><b>토큰버킷</b><span>"초당 이만큼만 내보낸다"를 흉내 내는 장치. 링크 대역을 모델링한다.</span></div>
     <div><b>멱등</b><span>같은 일을 여러 번 해도 결과가 한 번 한 것과 같은 성질.</span></div>
     <div><b>계약</b><span><code>edge_contract.json</code>. 대역·지연·큐 수치의 유일한 출처. rev.9 에서 뽑아 고정했다.</span></div>
+    <div><b>수집기</b><span>판정·텔레메트리를 받아 장부(DynamoDB)에 적는 프로그램. <code>ingest/collector.py</code>.</span></div>
+    <div><b>조정기</b><span>사진 묶음의 도착을 받아 판정과 짝짓고 지문을 대조하는 프로그램. <code>ingest/reconciler.py</code>.</span></div>
+    <div><b>영속 세션</b><span>구독자가 꺼져 있어도 브로커가 그 이름 앞으로 온 메시지를 보관하는 연결 방식.</span></div>
+    <div><b>PUBACK</b><span>"이 메시지 처리했다"는 확인. 보내기 전에 죽으면 브로커가 다시 보낸다.</span></div>
+    <div><b>조건부 쓰기</b><span>"이미 있으면 쓰지 않는다", "상태가 PENDING 일 때만 옮긴다"처럼 조건을 건 쓰기. 중복과 경쟁을 막는다.</span></div>
+    <div><b>GSI</b><span>보조 색인. 주 키가 아닌 값(차 × 상태)으로 빠르게 찾는 길.</span></div>
+    <div><b>버킷 알림</b><span>MinIO/S3 에 파일이 올라오면 그 사실을 다른 곳(여기선 MQTT)으로 알리는 기능.</span></div>
+    <div><b>스윕</b><span>주기적으로 훑어 남은 일을 치우는 작업. 알림이 빠진 틈을 메운다.</span></div>
+    <div><b>QUARANTINED</b><span>지문이 맞지 않아 격리한 사진. 학습에 넣지 않는다.</span></div>
+    <div><b>차량 시계 · 벽시계</b><span>차가 적은 시각(모의) · 클라우드가 받은 실제 시각. 지연은 차량 시계로만 잰다.</span></div>
   </div>
 </section>
 
