@@ -13,6 +13,7 @@
     replay ARM [--dry-run] [--limit N] [--speed X]
                차량 시뮬레이터 — 한 팔의 pool 후보 전량 재생  edge-agent/replay.py
     collect    수집기 — 판정 평면 MQTT → DynamoDB (Ctrl+C)   ingest/collector.py
+    reconcile  조정기 — S3 이벤트 → 상태 전이·체크섬 (Ctrl+C) ingest/reconciler.py
     status [출력경로]
                진행 현황 페이지를 산출물에서 굽는다          docs/build_status.py
     guide [출력경로]
@@ -114,6 +115,11 @@ def cmd_collect(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "ingest", "collector.py"), *args])
 
 
+def cmd_reconcile(*args: str) -> int:
+    _need_env_file()
+    return _run([sys.executable, os.path.join(ROOT, "ingest", "reconciler.py"), *args])
+
+
 def cmd_status(*args: str) -> int:
     return _run([sys.executable, os.path.join(ROOT, "docs", "build_status.py"), *args])
 
@@ -125,10 +131,10 @@ def cmd_guide(*args: str) -> int:
 COMMANDS = {
     "check": cmd_check, "up": cmd_up, "down": cmd_down,
     "bootstrap": cmd_bootstrap, "test": cmd_test, "contract": cmd_contract,
-    "replay": cmd_replay, "collect": cmd_collect, "status": cmd_status, "guide": cmd_guide,
+    "replay": cmd_replay, "collect": cmd_collect, "reconcile": cmd_reconcile, "status": cmd_status, "guide": cmd_guide,
 }
 #: 인자를 받는 명령
-TAKES_ARGS = {"replay", "status", "guide"}
+TAKES_ARGS = {"replay", "collect", "reconcile", "status", "guide"}
 
 
 def main(argv: list[str]) -> int:

@@ -10,12 +10,13 @@
 
 테이블 두 구현
 -------------------------------------------------------------------------------
-`Store` 는 아래 네 연산만 쓰는 `Table` 위에 선다. 연산이 적어야 두 구현이 갈라지지 않는다.
+`Store` 는 아래 다섯 연산만 쓰는 `Table` 위에 선다. 연산이 적어야 두 구현이 갈라지지 않는다.
 
     put_new(item)                       PK 가 없을 때만 쓴다 → bool   (멱등 쓰기)
     get(pk, sk)                         강한 일관성 읽기 → dict | None
     update(pk, sk, set_if_absent, add)  없는 속성만 SET · 집합 ADD → 갱신 후 아이템 전체
     transition(pk, sk, src, updates)    state == src 일 때만 SET → bool
+    query_gsi1(gsi1pk)                  GSI1 한 파티션 전부 → list[dict]  (최종 일관성)
 
 - `DynamoTable` — boto3 저수준 클라이언트. 접근은 `common.aws` 를 통과한다.
 - `MemoryTable` — dict. 단위 테스트가 스택 없이 같은 `Store` 로직을 돌리게 한다.
@@ -80,10 +81,6 @@ def state_gsi1pk(vin: str, state: V.FrameState) -> str:
 
 
 # ─────────────────────────────────────────────────────────── 테이블 구현
-class ConditionFailed(Exception):
-    pass
-
-
 class MemoryTable:
     """단위 테스트용. DynamoDB 가 보장하는 것(아이템 단위 원자성·조건부 쓰기)만 흉내 낸다."""
 
@@ -116,6 +113,10 @@ class MemoryTable:
             return False
         it.update(copy.deepcopy(updates))
         return True
+
+    def query_gsi1(self, gsi1pk: str) -> list[dict[str, Any]]:
+        return sorted((copy.deepcopy(it) for it in self.items.values()
+                       if it.get("GSI1PK") == gsi1pk), key=lambda it: it.get("GSI1SK", ""))
 
 
 def _to_ddb(v: Any) -> Any:
@@ -213,6 +214,17 @@ class DynamoTable:
                 return False
             raise
 
+    def query_gsi1(self, gsi1pk: str) -> list[dict[str, Any]]:
+        out, kw = [], {}
+        while True:
+            r = self.c.query(TableName=self.name, IndexName="GSI1",
+                             KeyConditionExpression="GSI1PK = :p",
+                             ExpressionAttributeValues=self._s({":p": gsi1pk}), **kw)
+            out.extend(self._d(it) for it in r["Items"])
+            if "LastEvaluatedKey" not in r:
+                return out
+            kw = {"ExclusiveStartKey": r["LastEvaluatedKey"]}
+
 
 # ─────────────────────────────────────────────────────────── 규약
 class Store:
@@ -240,6 +252,11 @@ class Store:
 
     def get_frame(self, frame_uuid: str) -> Optional[dict[str, Any]]:
         return self.t.get(frame_pk(frame_uuid), META)
+
+    def frames_in_state(self, vin: str, state: V.FrameState) -> list[dict[str, Any]]:
+        """GSI1 조회. **최종 일관성**이라 방금 옮긴 프레임이 빠지거나 남을 수 있다 —
+        목록은 후보로만 쓰고, 전이는 조건부로 건다."""
+        return self.t.query_gsi1(state_gsi1pk(vin, state))
 
     def transition(self, frame_uuid: str, vin: str, src: V.FrameState, dst: V.FrameState,
                    now: str, extra: Optional[dict[str, Any]] = None) -> bool:

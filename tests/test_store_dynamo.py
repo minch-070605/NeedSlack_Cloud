@@ -118,6 +118,26 @@ class TestDynamoMatchesMemory(unittest.TestCase):
         self.assertTrue(all(v["state"] == TC.UPLOADED for k, v in ddb.items()
                             if k[0].startswith("FRAME#")))
 
+    def test_reconciler_both_orders_and_sweep(self):
+        """조정기 경로 — 도착 기록 · 승격 · 체크섬 전이 · GSI1 스윕이 두 구현에서 같다."""
+        import test_reconciler as TRC
+        _, sink, _, _ = TR.run(n=150, every=3)
+        half = dict(list(sink.blobs.items())[: len(sink.blobs) // 2])
+
+        def sc(st):
+            col = TC.CO.Collector(st, now=lambda: TC.NOW)
+            rc = TRC.RC.Reconciler(st, TRC.MemoryBlobs(sink), TRC.BUCKET, ["sim-DYN_B"],
+                                   now=lambda: TC.NOW)
+            for key, (blob, meta) in half.items():          # 절반은 번들이 먼저
+                rc.handle_event(TRC.s3_event(key, blob, meta))
+            TC.feed(col, sink)
+            rc.sweep_uploaded()
+            rc.scan_bucket()                                 # 나머지 절반은 이벤트 유실
+        mem, ddb = self._both(sc)
+        self._assert_same(mem, ddb)
+        self.assertTrue(all(v["state"] == "INDEXED" for k, v in ddb.items()
+                            if k[0].startswith("FRAME#")))
+
     def test_state_gsi_query(self):
         """스냅샷이 쓸 경로 — GSI1 로 한 차량의 한 상태만 뽑힌다."""
         r, sink, _, _ = TR.run(n=60, every=1, queue_capacity=40_000)
