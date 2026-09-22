@@ -297,3 +297,13 @@ def topic_verdict(vin: str) -> str:
 
 def topic_telemetry(vin: str) -> str:
     return f"ns/v1/{vin}/curation/telemetry"
+
+
+#: 평면 2 도착 이벤트. 차량이 아니라 **스토리지가** 발행한다 — MinIO 버킷 알림(notify_mqtt).
+#: `_cloud` 는 vin 자리에 올 수 없는 이름이라 차량 토픽과 섞이지 않는다.
+#: 본문은 S3 이벤트 형식이고 `Records[].s3.object.key` 는 URL 인코딩돼 있다.
+#: infra/docker-compose.yml 의 MINIO_NOTIFY_MQTT_TOPIC_NS 와 같아야 한다(테스트가 검사).
+TOPIC_S3_EVENTS = "ns/v1/_cloud/s3/object-created"
+
+#: 버킷 알림 규칙이 가리키는 대상. compose 의 대상 ID `NS` 에서 정해진다.
+S3_EVENT_TARGET_ARN = "arn:minio:sqs::NS:mqtt"

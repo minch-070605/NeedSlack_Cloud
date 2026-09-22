@@ -23,14 +23,18 @@ def env(k, default=None):
     return v
 
 
-def create_bucket():
+def _s3():
     import boto3
-    from botocore.exceptions import ClientError
-    s3 = boto3.client(
+    return boto3.client(
         "s3", endpoint_url=env("AWS_ENDPOINT_S3"),
         aws_access_key_id=env("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=env("AWS_SECRET_ACCESS_KEY"),
         region_name=env("AWS_REGION", "ap-northeast-2"))
+
+
+def create_bucket():
+    from botocore.exceptions import ClientError
+    s3 = _s3()
     name = env("S3_BUCKET", "ns-raw-payload")
     try:
         s3.head_bucket(Bucket=name)
@@ -38,6 +42,26 @@ def create_bucket():
     except ClientError:
         s3.create_bucket(Bucket=name)
         print(f"  버킷 {name} 생성")
+
+
+def attach_bucket_notification():
+    """버킷에 '객체 생성 → MQTT' 규칙을 붙인다. 대상 자체는 compose 의 MinIO 환경변수가 만든다.
+
+    put 은 버킷의 알림 설정 **전체를 교체**하므로 몇 번 돌려도 같은 결과다(멱등).
+    대상 ARN 은 MinIO 전용이다 — 평면 2 는 M4 에서도 로컬에 남는다(판정 평면만 올린다).
+    """
+    import verdict as V
+    s3 = _s3()
+    name = env("S3_BUCKET", "ns-raw-payload")
+    want = [{"Id": "ns-object-created", "QueueArn": V.S3_EVENT_TARGET_ARN,
+             "Events": ["s3:ObjectCreated:*"]}]
+    have = s3.get_bucket_notification_configuration(Bucket=name).get("QueueConfigurations", [])
+    if [(q["QueueArn"], sorted(q["Events"])) for q in have] ==             [(q["QueueArn"], sorted(q["Events"])) for q in want]:
+        print(f"  버킷 알림 {name} → {V.TOPIC_S3_EVENTS} 이미 있음")
+        return
+    s3.put_bucket_notification_configuration(
+        Bucket=name, NotificationConfiguration={"QueueConfigurations": want})
+    print(f"  버킷 알림 {name} → {V.TOPIC_S3_EVENTS} 설정")
 
 
 def create_table():
@@ -78,6 +102,7 @@ def apply_pg():
 if __name__ == "__main__":
     print("부트스트랩 시작 (멱등)")
     create_bucket()
+    attach_bucket_notification()
     create_table()
     apply_pg()
     print("완료")

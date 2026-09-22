@@ -42,8 +42,25 @@ services:
     environment:
       MINIO_ROOT_USER: needslack
       MINIO_ROOT_PASSWORD: needslack-local-secret
+      # 버킷 알림 → Mosquitto (평면 2 도착 이벤트. 조정기가 구독한다)
+      # 대상 ID `NS` → ARN `arn:minio:sqs::NS:mqtt`. 토픽·ARN 의 단일 소스는 schema/verdict.py
+      # (TOPIC_S3_EVENTS · S3_EVENT_TARGET_ARN) 이고 tests/test_stack_config.py 가 일치를 검사한다.
+      # 버킷에 규칙을 붙이는 것은 부트스트랩이다.
+      MINIO_NOTIFY_MQTT_ENABLE_NS: "on"
+      MINIO_NOTIFY_MQTT_BROKER_NS: "tcp://mosquitto:1883"
+      MINIO_NOTIFY_MQTT_TOPIC_NS: "ns/v1/_cloud/s3/object-created"
+      MINIO_NOTIFY_MQTT_QOS_NS: "1"
+      MINIO_NOTIFY_MQTT_KEEP_ALIVE_INTERVAL_NS: "10s"
+      MINIO_NOTIFY_MQTT_RECONNECT_INTERVAL_NS: "5s"
+      # 브로커가 내려가 있는 동안의 이벤트를 디스크에 보관했다가 재전송한다.
+      # /data 밑에 두지 않는다 — 데이터 디렉터리의 최상위 폴더는 버킷으로 해석된다.
+      MINIO_NOTIFY_MQTT_QUEUE_DIR_NS: "/notify-queue"
     volumes:
       - minio-data:/data
+      - minio-notify-queue:/notify-queue
+    depends_on:
+      mosquitto:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -82,5 +99,6 @@ services:
 volumes:
   mosquitto-data:
   minio-data:
+  minio-notify-queue:
   dynamodb-data:
   pg-data:
