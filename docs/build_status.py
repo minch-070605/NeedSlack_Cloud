@@ -149,8 +149,9 @@ def pipeline_live() -> Optional[dict]:
         for fs in V.FrameState:
             items = st.frames_in_state(vin, fs)
             states[fs.value] = len(items)
-            if fs is V.FrameState.INDEXED:
-                lat = sorted(float(f["arrival_latency_s"]) for f in items if "arrival_latency_s" in f)
+            if fs in (V.FrameState.INDEXED, V.FrameState.IN_DATASET):   # 검증을 마친 프레임
+                lat += [float(f["arrival_latency_s"]) for f in items if "arrival_latency_s" in f]
+        lat.sort()
         n_obj = n_bytes = 0
         for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=f"vin={vin}/"):
             for o in page.get("Contents", []):
@@ -167,8 +168,9 @@ def run_checks(live_arm: dict, r: "RP.ReplayReport") -> list[tuple[str, str, boo
     """운영 적재가 dry-run 재생 보고와 맞는가 — M1 완료 판정 (README §4)."""
     s, lat = live_arm["states"], live_arm["latency"]
     lat_max = lat[-1] if lat else 0.0
+    done = s["INDEXED"] + s["IN_DATASET"]           # 검증 완료 — 스냅샷에 편입됐어도 같다
     return [
-        ("판정 전부 INDEXED", f"{n0(s['INDEXED'])} / {n0(r.accepted)}", s["INDEXED"] == r.accepted),
+        ("판정 전부 검증 (INDEXED·IN_DATASET)", f"{n0(done)} / {n0(r.accepted)}", done == r.accepted),
         ("QUARANTINED 없음", n0(s["QUARANTINED"]), s["QUARANTINED"] == 0),
         ("대기(PENDING·UPLOADED) 없음", n0(s["PENDING"] + s["UPLOADED"]), s["PENDING"] + s["UPLOADED"] == 0),
         ("번들 전부 도착", f"{n0(live_arm['bundles_arrived'])} / {n0(r.bundles)}",
@@ -180,7 +182,8 @@ def run_checks(live_arm: dict, r: "RP.ReplayReport") -> list[tuple[str, str, boo
 
 
 def arm_complete(live: Optional[dict], rep: dict, arm: str) -> bool:
-    return bool(live and live["arms"][arm]["states"]["INDEXED"] and
+    st = live["arms"][arm]["states"] if live else {}
+    return bool(live and st["INDEXED"] + st["IN_DATASET"] and
                 all(ok for _, _, ok in run_checks(live["arms"][arm], rep[arm])))
 
 
@@ -276,7 +279,8 @@ def size_bars(rows: list[tuple[str, float, str]], s_contract: int) -> str:
             f'<div class="axis-track">{ticks}{marker}</div><div class="sz-val unit">KB</div></div></div>')
 
 
-STATE_ORDER = (("INDEXED", "ok", "검증 완료"), ("UPLOADED", "up", "도착·검증 대기"),
+STATE_ORDER = (("IN_DATASET", "ds", "데이터셋 편입"), ("INDEXED", "ok", "검증 완료"),
+               ("UPLOADED", "up", "도착·검증 대기"),
                ("PENDING", "pend", "사진 대기"), ("QUARANTINED", "crit", "격리"),
                ("DROPPED", "drop", "버려짐"))
 
@@ -561,7 +565,7 @@ thead th.sta_b{{color:var(--sta)}}thead th.dyn_b{{color:var(--dyn)}}
 .fn-bar{{grid-area:bar;display:flex;height:22px;border-radius:4px;overflow:hidden;gap:2px;background:var(--code)}}
 .fn-tot{{grid-area:tot;text-align:right;font-size:14px}}
 .fn-empty{{grid-column:2 / span 2;color:var(--muted);font-size:13.5px}}
-.fn-seg.ok,.fn-key i.ok{{background:var(--ok)}}.fn-seg.up,.fn-key i.up{{background:var(--up)}}
+.fn-seg.ds,.fn-key i.ds{{background:var(--accent)}}.fn-seg.ok,.fn-key i.ok{{background:var(--ok)}}.fn-seg.up,.fn-key i.up{{background:var(--up)}}
 .fn-seg.pend,.fn-key i.pend{{background:var(--warn)}}.fn-seg.crit,.fn-key i.crit{{background:var(--crit)}}
 .fn-seg.drop,.fn-key i.drop{{background:var(--idle)}}
 .fn-legend{{grid-area:legend;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted)}}

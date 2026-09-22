@@ -101,7 +101,7 @@ def m1_proof(live, rep) -> str:
                 '<code>python run.py guide</code> 로 다시 구우면 실제 적재 상태가 여기 그려진다.</p>')
     done = [a for a in V.ARMS if BS.arm_complete(live, rep, a)]
     lat = {a: live["arms"][a]["latency"] for a in V.ARMS}
-    txt = " · ".join(f"{a} 판정 {live['arms'][a]['states']['INDEXED']:,}건이 INDEXED, 도착 지연 최대 "
+    txt = " · ".join(f"{a} 판정 {live['arms'][a]['states']['INDEXED'] + live['arms'][a]['states']['IN_DATASET']:,}건이 검증을 마쳤고, 도착 지연 최대 "
                      f"{lat[a][-1]:,.0f} s" for a in done)
     return (f'<div class="funnel">{"".join(BS.funnel(a, live["arms"][a]["states"]) for a in V.ARMS)}</div>'
             f'<p class="lede">지금 운영 테이블의 모습이다. {E(txt) if txt else "아직 끝까지 통과한 팔이 없다."}'
@@ -304,7 +304,7 @@ svg .dot{{fill:var(--accent)}}
 .fn-bar{{grid-area:bar;display:flex;height:22px;border-radius:4px;overflow:hidden;gap:2px;background:var(--code)}}
 .fn-tot{{grid-area:tot;text-align:right;font-size:14px}}
 .fn-empty{{grid-column:2 / span 2;color:var(--muted);font-size:13.5px}}
-.fn-seg.ok,.fn-key i.ok{{background:var(--ok)}}.fn-seg.up,.fn-key i.up{{background:var(--up)}}
+.fn-seg.ds,.fn-key i.ds{{background:var(--accent)}}.fn-seg.ok,.fn-key i.ok{{background:var(--ok)}}.fn-seg.up,.fn-key i.up{{background:var(--up)}}
 .fn-seg.pend,.fn-key i.pend{{background:var(--warn)}}.fn-seg.crit,.fn-key i.crit{{background:var(--crit)}}
 .fn-seg.drop,.fn-key i.drop{{background:var(--idle)}}
 .fn-legend{{grid-area:legend;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted)}}
