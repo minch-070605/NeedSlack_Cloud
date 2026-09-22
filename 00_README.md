@@ -127,7 +127,8 @@ cd schema && python gen_edge_contract.py     # rev.9 가 바뀌면 다시 돌린
 | **진행 현황** (마일스톤 · 재생 실측 · 발견) | https://claude.ai/artifact/BmhfRsECuYyeSDFERS3GHr | `python run.py status` → `docs/_build/status.html` 재배포 |
 | **도메인 입문** (MQTT · MinIO · 두 평면 · 핵심 개념) | https://claude.ai/artifact/MMcuW7w7tdUMronLtuQdnP | `python run.py guide` → `docs/_build/guide.html` 재배포 |
 
-> 재빌드는 같은 파일 경로로 배포되므로 **URL이 유지**됩니다. 배포는 별도 단계입니다.
+> 진행 현황·도메인 입문은 **갱신할 때마다 별도 아티팩트로 올린다** — 같은 URL 에 덮어쓰지 않는다(지난 판을 나란히 볼 수 있게).
+> 위 두 링크는 M2 완료 시점 판이다. 판마다의 링크는 claude.ai 갤러리(`/artifacts`)에 제목으로 쌓인다. 배포는 별도 단계입니다.
 
 ---
 
