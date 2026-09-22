@@ -219,8 +219,8 @@ def milestones(runs: Optional[dict] = None) -> list[dict]:
             ("역추적 질의", ex("tests", "test_lineage.py")),
         ]},
         {"m": "M3", "goal": "두 팔 × 3시드 재현 — 결론", "steps": [
-            ("Colab 학습", ex("pipelines", "colab_train.ipynb")),
-            ("평가", ex("pipelines", "evaluate.py")),
+            ("Colab 노트북", ex("pipelines", "colab_train.ipynb")),
+            ("6런 학습·평가", ex("data", "m3", "m3_eval.json")),     # Colab 이 낸 결과를 내려받았다
             ("Δ 대조표", ex("pipelines", "compare.py")),
         ]},
         {"m": "M4", "goal": "AWS 수직 절단면", "steps": [
