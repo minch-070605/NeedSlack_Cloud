@@ -51,7 +51,8 @@ def dynamodb_client():
                         region_name=region())
 
 
-def mqtt_client(client_id: str, persistent: bool = False, on_connect=None, on_message=None):
+def mqtt_client(client_id: str, persistent: bool = False, on_connect=None, on_message=None,
+                on_disconnect=None):
     """연결된 MQTT 클라이언트. 네트워크 루프를 백그라운드로 돌린 채 돌려준다.
 
     `persistent=True` 는 **구독자용**이다 — 영속 세션(`clean_session=False`)에 수동 PUBACK.
@@ -70,6 +71,8 @@ def mqtt_client(client_id: str, persistent: bool = False, on_connect=None, on_me
         c.on_connect = on_connect
     if on_message is not None:
         c.on_message = on_message
+    if on_disconnect is not None:
+        c.on_disconnect = on_disconnect
     c.connect(_env("MQTT_HOST", "localhost"), int(_env("MQTT_PORT", "1883")), keepalive=60)
     c.loop_start()
     return c

@@ -257,60 +257,18 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
 
     from common import aws
+    import subscriber
     rc = Reconciler(S.Store(S.DynamoTable(aws.dynamodb_client(), a.table)),
                     S3Blobs(aws.s3_client()), a.bucket or aws.raw_bucket(),
                     [V.vin_of(arm) for arm in V.ARMS])
-    fatal: list[BaseException] = []
-    stop = threading.Event()
-
-    def on_connect(c, userdata, flags, reason_code, properties):
-        if reason_code.is_failure:
-            print(f"MQTT 연결 실패: {reason_code}", flush=True)
-            return
-        c.subscribe(V.TOPIC_S3_EVENTS, qos=1)
-        print(f"구독  {V.TOPIC_S3_EVENTS}  (세션 {'이어받음' if flags.session_present else '새로'})",
-              flush=True)
-
-    def on_message(c, userdata, m):
-        if stop.is_set():
-            return                              # 멈추는 중 — 확인하지 않는다(재전송된다)
-        try:
-            rc.handle_event(m.payload)
-        except Rejected as e:
-            rc.n["rejected"] += 1
-            print(f"거부  {m.topic}: {e}", flush=True)
-        except BaseException as e:              # 저장소 오류 — 확인하지 않고 멈춘다
-            fatal.append(e)
-            stop.set()
-            return
-        c.ack(m.mid, m.qos)
-
-    print(f"조정기 시작  client_id={a.client_id} · 테이블 {a.table} · 버킷 {rc.bucket}", flush=True)
-    # 구독을 먼저 건다 — 버킷 대조 중에 올라오는 번들의 이벤트를 놓치지 않게. 겹쳐 처리돼도 멱등이다.
-    mq = aws.mqtt_client(a.client_id, persistent=True, on_connect=on_connect, on_message=on_message)
-    try:
-        print(f"버킷 대조  도착 기록 없던 번들 {rc.scan_bucket():,} 개 처리", flush=True)
-        while not stop.is_set():
-            rc.sweep_uploaded()
-            for _ in range(int(SWEEP_EVERY_S / STATS_EVERY_S)):
-                if stop.wait(STATS_EVERY_S):
-                    break
-                print("  " + rc.summary(), flush=True)
-    except KeyboardInterrupt:
-        stop.set()
-    except BaseException as e:                  # 버킷 대조·스윕 중 저장소 오류
-        fatal.append(e)
-        stop.set()
-    finally:
-        mq.loop_stop()
-        mq.disconnect()
-    print("조정기 정지  " + rc.summary(), flush=True)
-    if fatal:
-        print(f"★ 저장소 오류로 멈췄다 — 처리하지 못한 이벤트는 확인하지 않았다(재시작하면 "
-              f"재전송되고, 버킷 대조가 나머지를 메운다): {fatal[0]!r}", flush=True)
-        return 1
-    return 0
-
+    # 구독을 먼저 걸고(subscriber.run) 버킷 대조를 돈다 — 대조 중에 올라오는 번들의 이벤트를
+    # 놓치지 않게. 겹쳐 처리돼도 멱등이다.
+    return subscriber.run(
+        a.client_id, [V.TOPIC_S3_EVENTS], lambda topic, payload: rc.handle_event(payload),
+        Rejected, rc.n, rc.summary,
+        banner=f"조정기 시작  client_id={a.client_id} · 테이블 {a.table} · 버킷 {rc.bucket}",
+        startup=lambda: f"버킷 대조  도착 기록 없던 번들 {rc.scan_bucket():,} 개 처리",
+        tick=rc.sweep_uploaded, tick_every_s=SWEEP_EVERY_S, stats_every_s=STATS_EVERY_S)
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

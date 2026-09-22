@@ -15,7 +15,7 @@
 -------------------------------------------------------------------------------
 - **영속 세션 + 수동 PUBACK.** 처리를 마친 메시지만 확인한다. 저장소 오류로 처리하지 못하면
   확인하지 않고 **프로세스를 멈춘다** — 다시 켜면 브로커가 미확인 메시지를 재전송한다.
-  계속 돌면서 건너뛰면 그 메시지는 재접속 전까지 오지 않는다.
+  계속 돌면서 건너뛰면 그 메시지는 재접속 전까지 오지 않는다. 구독 루프는 `subscriber.py`.
 - **독 메시지는 버린다.** 파싱·스키마·불변식 위반은 몇 번 재전송해도 같으므로 확인하고 센다.
 - 재전송된 판정은 조건부 쓰기가, 재전송된 번들 목록은 집합 ADD 가 흡수한다(수용 기준 5).
 
@@ -29,8 +29,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import threading
-import time
 from collections import Counter, defaultdict
 from typing import Callable
 
@@ -134,50 +132,12 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
 
     from common import aws
+    import subscriber
     col = Collector(S.Store(S.DynamoTable(aws.dynamodb_client(), a.table)))
-    fatal: list[BaseException] = []
-    stop = threading.Event()
-
-    def on_connect(c, userdata, flags, reason_code, properties):
-        if reason_code.is_failure:
-            print(f"MQTT 연결 실패: {reason_code}", flush=True)
-            return
-        # 영속 세션이라 구독이 남아 있을 수 있지만, 첫 연결·세션 만료에 대비해 늘 다시 건다
-        c.subscribe([(t, 1) for t in TOPICS])
-        print(f"구독  {', '.join(TOPICS)}  (세션 {'이어받음' if flags.session_present else '새로'})",
-              flush=True)
-
-    def on_message(c, userdata, m):
-        if stop.is_set():
-            return                              # 멈추는 중 — 확인하지 않는다(재전송된다)
-        try:
-            col.handle(m.topic, m.payload)
-        except Rejected as e:
-            col.n["rejected"] += 1
-            print(f"거부  {m.topic}: {e}", flush=True)
-        except BaseException as e:              # 저장소 오류 — 확인하지 않고 멈춘다
-            fatal.append(e)
-            stop.set()
-            return
-        c.ack(m.mid, m.qos)
-
-    mq = aws.mqtt_client(a.client_id, persistent=True, on_connect=on_connect, on_message=on_message)
-    print(f"수집기 시작  client_id={a.client_id} · 테이블 {a.table}", flush=True)
-    try:
-        while not stop.wait(STATS_EVERY_S):
-            print("  " + col.summary(), flush=True)
-    except KeyboardInterrupt:
-        stop.set()
-    finally:
-        mq.loop_stop()
-        mq.disconnect()
-    print("수집기 정지  " + col.summary(), flush=True)
-    if fatal:
-        print(f"★ 저장소 오류로 멈췄다 — 처리하지 못한 메시지는 확인하지 않았다(재시작하면 "
-              f"재전송된다): {fatal[0]!r}", flush=True)
-        return 1
-    return 0
-
+    return subscriber.run(
+        a.client_id, list(TOPICS), col.handle, Rejected, col.n, col.summary,
+        banner=f"수집기 시작  client_id={a.client_id} · 테이블 {a.table}",
+        stats_every_s=STATS_EVERY_S)
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
