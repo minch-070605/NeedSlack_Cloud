@@ -12,7 +12,7 @@
 BEGIN;
 
 -- ─────────────────────────────────────────── 큐레이션 캠페인
--- 엣지에 배포되는 need_profile 한 벌. MVP 는 rev.9 의 프로파일 하나만 등록한다.
+-- 엣지에 배포되는 need_profile 한 벌. MVP 는 팀 연구의 프로파일 하나만 등록한다.
 CREATE TABLE campaign (
     campaign_id     TEXT         PRIMARY KEY,
     profile_json    JSONB        NOT NULL,
@@ -33,10 +33,10 @@ CREATE TABLE dataset_version (
     campaign_id     TEXT        NOT NULL REFERENCES campaign(campaign_id),
     manifest_s3_uri TEXT        NOT NULL,
     n_frames        INTEGER     NOT NULL CHECK (n_frames > 0),
-    split_seed      INTEGER     NOT NULL,          -- rev.9 config.SPLIT_SEED = 20260827
+    split_seed      INTEGER     NOT NULL,          -- 팀 연구 config.SPLIT_SEED = 20260827
     frozen_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- ★ 데이터셋은 팔당 하나다. 시드는 선별이 아니라 학습에만 작용한다 —
-    --   rev.9 g=1.0 이라 선별 배열이 시드와 무관하게 동일하다(schema/verdict.py vin_of).
+    --   팀 연구 g=1.0 이라 선별 배열이 시드와 무관하게 동일하다(schema/verdict.py vin_of).
     --   따라서 스냅샷 2개 · 학습 런 6개 가 된다.
     UNIQUE (campaign_id, arm)
 );
@@ -44,7 +44,7 @@ CREATE TABLE dataset_version (
 CREATE TABLE dataset_frame (
     ds_id        TEXT     NOT NULL REFERENCES dataset_version(ds_id) ON DELETE CASCADE,
     frame_uuid   CHAR(32) NOT NULL,                -- DynamoDB 로의 논리적 참조 (FK 없음)
-    frame_id     INTEGER  NOT NULL,                -- rev.9 전역 인덱스. 재현 대조용
+    frame_id     INTEGER  NOT NULL,                -- 팀 연구 전역 인덱스. 재현 대조용
     split        TEXT     NOT NULL CHECK (split IN ('tune','pool','held_out')),
     -- 설계결정-0001 §4: 기전이 다른 프레임을 한 학습셋에 섞지 않기 위해 층화 키로 싣는다
     reclaim_mode TEXT     NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE dataset_frame (
 CREATE INDEX dataset_frame_split_idx ON dataset_frame (ds_id, split);
 
 -- ─────────────────────────────────────────── 학습 런
--- LOCKED_TRAIN_ARGS 를 컬럼으로 고정한다. rev.9 yolo_detector.py 의
+-- LOCKED_TRAIN_ARGS 를 컬럼으로 고정한다. 팀 연구 yolo_detector.py 의
 -- assert_no_autotuning() 이 강제하던 것을 DB 제약으로 한 번 더 막는다.
 CREATE TABLE model_run (
     run_id      TEXT    PRIMARY KEY,               -- {ARM}-s{SEED}

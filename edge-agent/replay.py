@@ -26,7 +26,7 @@
 
 페이로드 — 실물 JPEG
 -------------------------------------------------------------------------------
-페이로드는 rev.9 `yolo_ds/images/all/<frame_id:05d>.jpg` 실물이다. M3 데이터셋이 S3 에서
+페이로드는 팀 연구 `yolo_ds/images/all/<frame_id:05d>.jpg` 실물이다. M3 데이터셋이 S3 에서
 꺼낸 이미지로 만들어져야 경로가 증명된다. 큐는 실제 바이트 수를 과금한다
 (계약 `S` = 144,500 B 는 이 이미지들의 실측 평균에서 왔다 — 보고서 부록).
 
@@ -465,8 +465,8 @@ class Replayer:
 
 
 # ─────────────────────────────────────────────────────────── 조립
-def rev9_root() -> str:
-    return os.path.abspath(os.environ.get("REV9_ROOT", os.path.join(ROOT, "..", "rev.9")))
+def team_root() -> str:
+    return os.path.abspath(os.environ.get("TEAM_ROOT", os.path.join(ROOT, "..", "NeedSlack")))
 
 
 def _sha16(path: str) -> str:
@@ -475,7 +475,7 @@ def _sha16(path: str) -> str:
 
 
 def build(arm: str, sink, speed: Optional[float], limit: Optional[int]) -> tuple[Replayer, FramesFile]:
-    r9 = rev9_root()
+    r9 = team_root()
     signals = armsignals.load(arm)
     frames = FramesFile(os.path.join(r9, "05_데이터셋", "board", "frames.bin"))
     sel_dir = os.path.join(r9, "04_중앙AI", "selections_axis2")

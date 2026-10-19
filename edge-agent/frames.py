@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""frames.py — rev.9 `05_데이터셋/board/frames.bin` 을 표준 라이브러리로 읽는다.
+"""frames.py — 팀 연구 `05_데이터셋/board/frames.bin` 을 표준 라이브러리로 읽는다.
 
-레이아웃 (rev.9 `02_전처리/s7_export_board.py`, version=2)
+레이아웃 (팀 연구 `02_전처리/s7_export_board.py`, version=2)
 -------------------------------------------------------------------------------
     헤더 16 B   "<4sHIHH2s"  magic=b"NSLK" · version u16 · frame_count u32 ·
                              img_w u16 · img_h u16 · reserved 2s

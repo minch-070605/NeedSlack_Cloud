@@ -2,10 +2,10 @@
 """M2 스냅샷의 검증·추출·tar 가 계약대로인지 검사한다 (stdlib unittest, 스택 불필요).
 
 입력은 재생기 → 수집기 → 조정기를 MemoryTable 위에서 끝까지 돌린 INDEXED 프레임이다.
-rev.9 선별·split 은 합성한다 — 재생기 테스트와 같은 pool(100…) 위에서.
+팀 연구 선별·split 은 합성한다 — 재생기 테스트와 같은 pool(100…) 위에서.
 
 수용 기준 (구현설계_MVP.md §6)
-    3  파이프라인이 대조를 왜곡 안 함 — INDEXED 집합 = rev.9 선별 (데이터 쪽)
+    3  파이프라인이 대조를 왜곡 안 함 — INDEXED 집합 = 팀 연구 선별 (데이터 쪽)
     7  평가셋 무오염 — 학습 ∩ held-out = ∅
 
     python -m unittest discover -s tests

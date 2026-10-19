@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """재생기가 계약을 실제로 돌리고, 두 평면에 올바른 것을 내보내는지 검사한다 (stdlib unittest).
 
-rev.9 자산도 로컬 스택도 쓰지 않는다 — 합성 프레임·합성 신호·MemorySink 로 돈다.
+팀 연구 자산도 로컬 스택도 쓰지 않는다 — 합성 프레임·합성 신호·MemorySink 로 돈다.
 
     python -m unittest discover -s tests
 """

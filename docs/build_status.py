@@ -8,11 +8,11 @@
 -------------------------------------------------------------------------------
     docs/개발기록.md               현재 위치 한 줄 · "🔴 먼저" 항목 · "🟡 열린 질문"   (상태의 유일한 출처)
     schema/edge_contract.json  계약 상한 (Q_min · L_max · S)
-    schema/arm_signals.json    팔별 타일 분포 · rev.9 발견
+    schema/arm_signals.json    팔별 타일 분포 · 팀 연구 발견
     edge-agent/replay.py       두 팔을 dry-run 해서 재생 실측을 **지금** 잰다 (약 10초)
     DynamoDB · MinIO (운영)     스택이 떠 있으면 팔별 상태·도착 지연·번들을 **지금** 읽는다.
                                내려가 있으면 그 절은 "측정 안 함"으로 굽는다
-    rev.9 yolo_ds 이미지        페이로드 크기 분포
+    팀 연구 yolo_ds 이미지        페이로드 크기 분포
     git log · tests/           최근 커밋 · 테스트 통과 수
     파일 존재                   마일스톤 단계 완료 여부 (산출물이 있으면 완료)
 
@@ -188,7 +188,7 @@ def arm_complete(live: Optional[dict], rep: dict, arm: str) -> bool:
 
 
 def payload_sizes(pool: list[int]) -> dict[str, float]:
-    d = os.path.join(RP.rev9_root(), "05_데이터셋", "yolo_ds", "images", "all")
+    d = os.path.join(RP.team_root(), "05_데이터셋", "yolo_ds", "images", "all")
     n = len([f for f in os.listdir(d) if f.endswith(".jpg")])
     sz = [os.path.getsize(os.path.join(d, f"{i:05d}.jpg")) for i in range(n)]
     return {"all": sum(sz) / n, "pool": sum(sz[i] for i in pool) / len(pool), "n_all": n}
@@ -375,7 +375,7 @@ def m3_result() -> Optional[dict]:
 
 def ci_plot(d: dict) -> str:
     """두 Δ 와 95% CI 를 한 축에. 0 선이 기준이다."""
-    rows = [("파이프라인", "dyn_b", d["delta"]["pipeline"]), ("오프라인 rev.9", "idle", d["delta"]["offline"])]
+    rows = [("파이프라인", "dyn_b", d["delta"]["pipeline"]), ("오프라인 팀 연구", "idle", d["delta"]["offline"])]
     lo = min(0.0, min(r[2]["ci"][0] for r in rows)) - 0.005
     hi = max(r[2]["ci"][1] for r in rows) + 0.005
     W, L, R, T, rh = 720, 130, 24, 24, 62
@@ -704,7 +704,7 @@ th.sta_b{{color:var(--sta)}}th.dyn_b{{color:var(--dyn)}}
 
 <section>
   <h2>M3 결과 — 파이프라인을 지나온 Δ</h2>
-  <p class="lede">두 팔 × 3시드를 Colab 에서 재학습해 held-out 에서 잰 값과, rev.9 오프라인 값(<code>eval_axis2_mc.json</code>)을 나란히 놓았다.
+  <p class="lede">두 팔 × 3시드를 Colab 에서 재학습해 held-out 에서 잰 값과, 팀 연구 오프라인 값(<code>eval_axis2_mc.json</code>)을 나란히 놓았다.
   <code>compare.py</code> 가 출처(데이터 · 코드 · 인자)를 검증하고 계보에 등록한 결과를 굽는다.</p>
   {m3}
 </section>
@@ -737,11 +737,11 @@ th.sta_b{{color:var(--sta)}}th.dyn_b{{color:var(--dyn)}}
   <div class="callout"><p><strong>선별분 페이로드가 계약 S 보다 크다 — STA_B {over_sta}% · DYN_B {over_dyn}%.</strong>
   전체 평균은 계약 근거와 맞지만 가치 기반 선별은 복잡한 장면(큰 JPEG)을 고른다. 업링크 수요 · δ_max · L_max 가 그만큼 낙관적이다.
   이번 런 규모에서는 큐 여유가 커서 드롭이 없었다.</p>
-  <p><strong>결정 — 계약은 고치지 않는다.</strong> 계약은 동결된 rev.9 <code>config.py</code> 의 스냅샷이다. 대신 같은 식(<code>EdgeContract.rederive</code>)에
+  <p><strong>결정 — 계약은 고치지 않는다.</strong> 계약은 동결된 팀 연구 <code>config.py</code> 의 스냅샷이다. 대신 같은 식(<code>EdgeContract.rederive</code>)에
   실측 평균 S 를 넣은 값을 아래에 병기한다. Δ mAP 결론에는 영향이 없다.</p>{rederive}</div>
-  <div class="callout"><p><strong>rev.9 frames.bin 의 conf_q8·det_count 가 interim 현재본과 다르다</strong>
+  <div class="callout"><p><strong>팀 연구 frames.bin 의 conf_q8·det_count 가 interim 현재본과 다르다</strong>
   (pool {n_pool} 중 conf_q8 {mism_conf} · det_count {mism_det} · mean_p {mism_mp} · kinematic_u8 {mism_kn} 프레임).
-  profile <code>{profile_sha}</code> 가 w_conf = 0 이라 value_score 는 불변이고, 선별은 타일 YOLO 점수라 대조와 무관하다. rev.9 는 동결이라 기록만 한다.</p></div>
+  profile <code>{profile_sha}</code> 가 w_conf = 0 이라 value_score 는 불변이고, 선별은 타일 YOLO 점수라 대조와 무관하다. 팀 연구는 동결이라 기록만 한다.</p></div>
 </section>
 
 <section>

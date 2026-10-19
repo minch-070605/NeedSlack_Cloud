@@ -8,8 +8,8 @@
 숫자는 전부 아래에서 읽는다(docs/작업규칙.md §2):
 
     m2   PostgreSQL 계보 · MinIO ns-datasets snapshot.json · schema/pg/001_init.sql
-    m3   rev.9 runs_yolo/axis2/eval_axis2_mc.json (오프라인 결과 · 시드별 값)
-         rev.9 04_중앙AI/yolo_detector.py 의 LOCKED_TRAIN_ARGS (ast 로 값만 읽는다 — import 하지 않는다)
+    m3   팀 연구 runs_yolo/axis2/eval_axis2_mc.json (오프라인 결과 · 시드별 값)
+         팀 연구 04_중앙AI/yolo_detector.py 의 LOCKED_TRAIN_ARGS (ast 로 값만 읽는다 — import 하지 않는다)
          pipelines/build_colab_nb.py 의 학습 인자 · ultralytics 버전 · 부트스트랩 횟수
 """
 from __future__ import annotations
@@ -123,15 +123,15 @@ def build_m2() -> str:
           f' 재학습 결과의 차이는 오직 이 {only:,}장에서 나온다 — 나머지는 두 팔이 똑같이 받는다.</p></div>')
 
     stops = [
-        ("① 정본 선별과 같은가", "재생·수집·조정을 지나 INDEXED 에 닿은 프레임 집합이 rev.9 선별 파일(세 시드 동일)과 한 장이라도 다르면 멈춘다. 파이프라인이 대조를 바꾸지 않았다는 증거다(수용 기준 3).",
+        ("① 정본 선별과 같은가", "재생·수집·조정을 지나 INDEXED 에 닿은 프레임 집합이 팀 연구 선별 파일(세 시드 동일)과 한 장이라도 다르면 멈춘다. 파이프라인이 대조를 바꾸지 않았다는 증거다(수용 기준 3).",
          f"두 팔 모두 {n:,} = {n:,}"),
-        ("② rev.9 가 실제로 학습한 목록과 같은가", "rev.9 가 오프라인 실험에서 쓴 학습 목록 파일과도 대조한다. 선별 파일과 학습 목록이 어긋나 있었다면 여기서 드러난다.",
+        ("② 팀 연구가 실제로 학습한 목록과 같은가", "팀 연구가 오프라인 실험에서 쓴 학습 목록 파일과도 대조한다. 선별 파일과 학습 목록이 어긋나 있었다면 여기서 드러난다.",
          "두 팔 모두 일치"),
         ("③ 평가셋과 겹치지 않는가", "학습 프레임이 held-out(평가 전용)에 한 장이라도 있으면 모든 점수가 무의미해진다. 학습 ∩ held-out = ∅ (수용 기준 7).",
          "겹침 0"),
         ("④ 기전·프로파일이 섞이지 않았는가", "한 스냅샷 안의 판정은 회수 기전(reclaim_mode)과 가치 프로파일이 하나여야 한다 — 섞인 데이터로 낸 점수는 어느 기전의 것도 아니다(설계결정-0001).",
          f"{sa['reclaim_mode']} · {da['reclaim_mode']}"),
-        ("⑤ 사진이 원본과 같은가", "번들에서 잘라 낸 바이트의 지문(sha256)을 판정이 들고 온 값, 그리고 rev.9 원본 파일과 대조한다. 전송 도중 한 비트라도 바뀌었으면 멈춘다.",
+        ("⑤ 사진이 원본과 같은가", "번들에서 잘라 낸 바이트의 지문(sha256)을 판정이 들고 온 값, 그리고 팀 연구 원본 파일과 대조한다. 전송 도중 한 비트라도 바뀌었으면 멈춘다.",
          f"{2 * n:,}장 전부 일치"),
     ]
     stops_html = '<ul class="stops">' + "".join(
@@ -172,9 +172,9 @@ def build_m2() -> str:
             " 지금은 앞쪽 두 칸이 비어 있다 — M3 가 채운다. 조인이 실제로 도는지는 테스트가 롤백되는 트랜잭션 안에서 가짜 점수로 확인한다.</p>" + chain_html),
         sec(6, "왜 Drive 에 tar 로 올리나", '<div class="prose" style="display:flex;flex-direction:column;gap:12px">'
             "<p>재학습은 Colab(구글의 무료 GPU)에서 한다. Colab 은 인터넷 너머에 있고 MinIO 는 이 PC 안에 있어서, <strong>Colab 이 번들을 직접 읽을 수 없다.</strong>"
-            " 그렇다고 rev.9 폴더의 사진을 쓰면 \"사진이 파이프라인을 지나왔다\"는 증명이 끊긴다.</p>"
+            " 그렇다고 팀 연구 폴더의 사진을 쓰면 \"사진이 파이프라인을 지나왔다\"는 증명이 끊긴다.</p>"
             "<p>그래서 스냅샷이 <strong>번들에서 잘라 낸 사진</strong>을 tar 로 묶고, 사람이 Drive 에 올린다. 평가셋(val 800 · held-out 2,826)과 시작 가중치는 두 팔이 똑같이 받는 고정 자산이라"
-            " <code>eval-common.tar</code> 하나로 따로 묶는다(설계결정-0002). rev.9 도 같은 방식으로 Colab 학습을 했다.</p></div>"),
+            " <code>eval-common.tar</code> 하나로 따로 묶는다(설계결정-0002). 팀 연구도 같은 방식으로 Colab 학습을 했다.</p></div>"),
         sec(7, "용어", gloss([
             ("동결 (freeze)", "한 번 만든 데이터셋을 다시는 고치지 않는 것. 다시 만들면 같아야 한다."),
             ("스냅샷", "움직이는 장부에서 한 순간을 떠 낸 데이터셋. 여기선 팔당 하나."),
@@ -188,7 +188,7 @@ def build_m2() -> str:
         ])),
     )
     return page("입문 M2 동결과 계보", "NeedSlack Cloud · 마일스톤 입문 · M2",
-                "파이프라인을 지나온 사진이 <em>rev.9 가 고른 그 사진과 한 장도 다르지 않은지</em> 확인하고, 얼려서, 점수까지 이어지는 사슬을 놓는다.",
+                "파이프라인을 지나온 사진이 <em>팀 연구가 고른 그 사진과 한 장도 다르지 않은지</em> 확인하고, 얼려서, 점수까지 이어지는 사슬을 놓는다.",
                 "진행 현황의 \"M2 완료\" 판을 읽는 데 필요한 것만 모았다. 숫자는 이 페이지를 만들 때 PostgreSQL 계보와 MinIO 의 snapshot.json 에서 읽었다.",
                 "".join(body))
 
@@ -196,7 +196,7 @@ def build_m2() -> str:
 # ─────────────────────────────────────────────────────────── M3
 def locked_args() -> dict:
     import replay
-    src = open(os.path.join(replay.rev9_root(), "04_중앙AI", "yolo_detector.py"), encoding="utf-8").read()
+    src = open(os.path.join(replay.team_root(), "04_중앙AI", "yolo_detector.py"), encoding="utf-8").read()
     for node in ast.parse(src).body:
         if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "LOCKED_TRAIN_ARGS":
             return {kw.arg: ast.literal_eval(kw.value) for kw in node.value.keywords}
@@ -224,8 +224,8 @@ def seed_plot(off: dict) -> str:
     brk = (f'<path class="brk" d="M{xs:.1f},{yb - 6} L{xs:.1f},{yb} L{xd:.1f},{yb} L{xd:.1f},{yb - 6}"/>'
            f'<text class="brk-t" x="{(xs + xd) / 2:.1f}" y="{yb + 16}" text-anchor="middle">Δ {off["DYN_B_vs_STA_B"]["delta"]:+.4f}</text>')
     b0 = off["B0"]["per_seed"]
-    return (f'<figure class="fig"><svg viewBox="0 0 {W} {H + 40}" role="img" aria-label="rev.9 오프라인 시드별 mAP50">'
-            f'{ticks}{marks}{brk}</svg><figcaption>rev.9 오프라인 결과(eval_axis2_mc.json). 점 = 시드 하나, 세로선 = 세 시드 평균. '
+    return (f'<figure class="fig"><svg viewBox="0 0 {W} {H + 40}" role="img" aria-label="팀 연구 오프라인 시드별 mAP50">'
+            f'{ticks}{marks}{brk}</svg><figcaption>팀 연구 오프라인 결과(eval_axis2_mc.json). 점 = 시드 하나, 세로선 = 세 시드 평균. '
             f'B0(무작위 선별)는 같은 조건에서 시드만 바꿔도 {min(b0):.4f}–{max(b0):.4f}, <b>{max(b0) - min(b0):.4f}</b> 만큼 흔들린다 — '
             f'Δ {off["DYN_B_vs_STA_B"]["delta"]:.4f} 의 약 두 배다.</figcaption></figure>')
 
@@ -233,7 +233,7 @@ def seed_plot(off: dict) -> str:
 def build_m3() -> str:
     import build_colab_nb as NB
     import replay
-    off = json.load(open(os.path.join(replay.rev9_root(), "04_중앙AI", "runs_yolo", "axis2", "eval_axis2_mc.json"),
+    off = json.load(open(os.path.join(replay.team_root(), "04_중앙AI", "runs_yolo", "axis2", "eval_axis2_mc.json"),
                          encoding="utf-8"))
     oc, oe = off["conditions"], off["equivalence"]["DYN_B_vs_STA_B"]
     offl = {"B0": oc["B0"], "STA_B": oc["STA_B"], "DYN_B": oc["DYN_B"], "DYN_B_vs_STA_B": oe}
@@ -246,7 +246,7 @@ def build_m3() -> str:
     kv += "".join(f"<div><b>{E(k)} = {v}</b><span>{E(x)}</span></div>" for k, v, x in [
         ("epochs", NB.TRAIN["epochs"], "고정 에폭 — 마지막 가중치(last.pt)만 쓴다"),
         ("batch", NB.TRAIN["batch"], ""), ("imgsz", NB.TRAIN["imgsz"], "입력 해상도"),
-        ("ultralytics", NB.ULTRALYTICS, "rev.9 와 같은 버전으로 고정")])
+        ("ultralytics", NB.ULTRALYTICS, "팀 연구와 같은 버전으로 고정")])
 
     todo = ('<ol class="steps-do">'
             "<li><b>Drive 한 폴더에 네 파일을 올린다</b> — <code>data/snapshots/</code> 의 <code>ds-STA_B.tar</code> · <code>ds-DYN_B.tar</code> · <code>eval-common.tar</code>(합계 약 1.6 GB)"
@@ -258,19 +258,19 @@ def build_m3() -> str:
 
     body = (
         sec(1, "처음부터 배우지 않는다 — 같은 출발점에서 다듬는다", '<div class="prose" style="display:flex;flex-direction:column;gap:12px">'
-            "<p>검출기(YOLOv8n)를 매번 처음부터 학습시키면 오래 걸리고 결과도 크게 흔들린다. 그래서 rev.9 는 먼저 기본 모델 하나(<strong>ybase</strong>, 0단 base)를 만들어 두고,"
+            "<p>검출기(YOLOv8n)를 매번 처음부터 학습시키면 오래 걸리고 결과도 크게 흔들린다. 그래서 팀 연구는 먼저 기본 모델 하나(<strong>ybase</strong>, 0단 base)를 만들어 두고,"
             " 각 팔이 고른 사진으로 그 위에서 조금 더 학습시킨다 — <strong>fine-tune</strong>.</p>"
             "<p>두 팔은 <strong>같은 ybase</strong> 에서 출발하고, <strong>같은 레시피</strong>로, <strong>같은 평가셋</strong>에서 점수를 받는다. 다른 것은 학습에 쓰인 사진 2,449장뿐이다"
             " — 그중에서도 실제로 다른 것은 406장이다(M2 입문 §3). 그래야 점수 차이를 \"선별 방식의 차이\"라고 말할 수 있다.</p></div>"),
-        sec(2, "레시피를 못 바꾸게 잠근다", '<p class="lede prose">학습 인자 하나만 달라도 비교가 무너진다. rev.9 는 인자를 코드에 잠가 두었고(LOCKED_TRAIN_ARGS), 노트북은 그 코드를 <strong>원문 그대로</strong> 쓴다.'
-            " 학습이 끝나면 실제로 쓰인 인자에서 팔·시드·경로를 뺀 나머지의 <strong>해시</strong>를 남긴다 — 여섯 런의 해시가 하나여야 한다(수용 기준 3). 아래 값은 rev.9 코드에서 읽었다.</p>"
+        sec(2, "레시피를 못 바꾸게 잠근다", '<p class="lede prose">학습 인자 하나만 달라도 비교가 무너진다. 팀 연구는 인자를 코드에 잠가 두었고(LOCKED_TRAIN_ARGS), 노트북은 그 코드를 <strong>원문 그대로</strong> 쓴다.'
+            " 학습이 끝나면 실제로 쓰인 인자에서 팔·시드·경로를 뺀 나머지의 <strong>해시</strong>를 남긴다 — 여섯 런의 해시가 하나여야 한다(수용 기준 3). 아래 값은 팀 연구 코드에서 읽었다.</p>"
             f'<div class="kv">{kv}</div>'),
         sec(3, "시드 — 같은 조건을 다시 돌려도 점수는 흔들린다", '<p class="lede prose">학습에는 무작위가 섞인다(섞는 순서, 초기화). <strong>시드</strong>는 그 무작위를 고정하는 번호다. 시드만 바꿔도 점수가 달라지는데,'
             " 그 흔들림이 두 팔의 차이보다 크다. 그래서 시드 하나로 비교하면 부호가 뒤집힐 수 있고, 팔마다 <strong>세 시드</strong>가 최소다(PRD 암묵지 1).</p>" + seed_plot(offl)),
         sec(4, "점수 — mAP50", '<div class="concept"><div class="text">'
             "<p>평가 전용 사진 2,826장에서 모델이 찾은 상자를 정답과 맞춰 본다. 겹치는 정도(IoU)가 <strong>0.5 이상</strong>이면 맞힌 것으로 친다.</p>"
             "<p>클래스(차·트럭·버스·보행자·자전거·차단물)마다 '얼마나 빠짐없이, 얼마나 정확히' 찾았는지를 한 수(AP)로 줄이고, 여섯 클래스의 평균이 <strong>mAP50</strong> 이다. 0~1, 높을수록 좋다."
-            " rev.9 와 <strong>같은 계산 코드</strong>(VOC all-points)를 쓴다 — 평가자가 바뀌면 숫자를 비교할 수 없다.</p></div>"
+            " 팀 연구와 <strong>같은 계산 코드</strong>(VOC all-points)를 쓴다 — 평가자가 바뀌면 숫자를 비교할 수 없다.</p></div>"
             f'<div class="kv"><div><b>STA_B {oc["STA_B"]["mean"]:.4f}</b><span>오프라인 · 세 시드 평균</span></div>'
             f'<div><b>DYN_B {oc["DYN_B"]["mean"]:.4f}</b><span>오프라인 · 세 시드 평균</span></div>'
             f'<div><b>held-out {off["n_held_out"]:,}</b><span>평가 전용 사진</span></div></div></div>'),
@@ -284,7 +284,7 @@ def build_m3() -> str:
             " 부호가 같은가, 구간이 0 을 배제하는가, 두 구간이 겹치는가, 시드별로 얼마나 다른가.</p>"),
         sec(7, "사람이 할 일", todo),
         sec(8, "용어", gloss([
-            ("ybase (0단 base)", "모든 런의 출발점이 되는 기본 검출 모델. rev.9 가 만들어 두었다."),
+            ("ybase (0단 base)", "모든 런의 출발점이 되는 기본 검출 모델. 팀 연구가 만들어 두었다."),
             ("fine-tune", "이미 학습된 모델을 새 데이터로 조금 더 학습시키는 것."),
             ("epoch", "학습 데이터를 한 바퀴 다 보는 것. 여기선 16 바퀴로 고정."),
             ("last.pt", "마지막 에폭의 가중치 파일. 점수를 보고 고른 best.pt 는 쓰지 않는다."),
@@ -298,7 +298,7 @@ def build_m3() -> str:
     )
     return page("입문 M3 재학습과 판정", "NeedSlack Cloud · 마일스톤 입문 · M3",
                 "같은 출발점 · 같은 레시피 · 같은 평가셋에서 <em>사진 406장의 차이만으로</em> 점수가 갈리는지를, 시드의 흔들림까지 넣어 잰다.",
-                "진행 현황의 \"M3 노트북 준비\" 판을 읽는 데 필요한 것만 모았다. 숫자는 rev.9 오프라인 결과 파일과 rev.9 학습 코드, 노트북 생성기에서 읽었다.",
+                "진행 현황의 \"M3 노트북 준비\" 판을 읽는 데 필요한 것만 모았다. 숫자는 팀 연구 오프라인 결과 파일과 팀 연구 학습 코드, 노트북 생성기에서 읽었다.",
                 "".join(body))
 
 

@@ -14,7 +14,7 @@
     docs/build_status.py        마일스톤 단계 완료 · 운영 테이블 실측(스택이 떠 있을 때)
     ingest/                     수집기·조정기의 주기 상수 (스윕 간격)
 
-rev.9 오프라인 결과(Δ mAP)만은 JSON 산출물이 없어 README 와 같은 값을 아래 상수로 둔다.
+팀 연구 오프라인 결과(Δ mAP)만은 JSON 산출물이 없어 README 와 같은 값을 아래 상수로 둔다.
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ import verdict as V                           # noqa: E402
 from contract import load as load_contract    # noqa: E402
 
 OUT_DEFAULT = os.path.join(ROOT, "docs", "_build", "guide.html")
-#: rev.9 축 2 오프라인 결과 (docs/개발기록.md ★ 포지셔닝). JSON 산출물이 없는 유일한 수치
+#: 팀 연구 축 2 오프라인 결과 (docs/개발기록.md ★ 포지셔닝). JSON 산출물이 없는 유일한 수치
 OFFLINE = {"sta": 0.2989, "dyn": 0.3230, "delta": 0.0241, "ci": (0.0115, 0.0369)}
 
 E = html.escape
@@ -341,7 +341,7 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
   <p class="thesis">차 안의 칩이 <em>더 잘 고른</em> 데이터가, 느리고 불완전한 실제 전송 경로를 지나
   클라우드에서 재학습까지 가도 <em>그 우위가 살아남는가</em>.</p>
   <div class="hero-num">
-    <div><div class="big">{delta}</div><span>rev.9 오프라인 Δ mAP · 95% CI {ci}</span></div>
+    <div><div class="big">{delta}</div><span>팀 연구 오프라인 Δ mAP · 95% CI {ci}</span></div>
     <div class="where"><span>지금 위치 (README)</span><p>{position}</p></div>
   </div>
   <p class="lede prose">이 프로젝트가 증명하려는 것은 위 한 문장이 전부다. 아래는 그 문장을 이해하는 데 필요한 것을
@@ -574,7 +574,7 @@ footer .thesis{{font-size:clamp(19px,2.6vw,24px)}}
     <div><b>번들</b><span>사진 {bundle}장을 묶은 파일 하나. 판정이 그 안의 위치를 가리킨다.</span></div>
     <div><b>토큰버킷</b><span>"초당 이만큼만 내보낸다"를 흉내 내는 장치. 링크 대역을 모델링한다.</span></div>
     <div><b>멱등</b><span>같은 일을 여러 번 해도 결과가 한 번 한 것과 같은 성질.</span></div>
-    <div><b>계약</b><span><code>edge_contract.json</code>. 대역·지연·큐 수치의 유일한 출처. rev.9 에서 뽑아 고정했다.</span></div>
+    <div><b>계약</b><span><code>edge_contract.json</code>. 대역·지연·큐 수치의 유일한 출처. 팀 연구에서 뽑아 고정했다.</span></div>
     <div><b>수집기</b><span>판정·텔레메트리를 받아 장부(DynamoDB)에 적는 프로그램. <code>ingest/collector.py</code>.</span></div>
     <div><b>조정기</b><span>사진 묶음의 도착을 받아 판정과 짝짓고 지문을 대조하는 프로그램. <code>ingest/reconciler.py</code>.</span></div>
     <div><b>영속 세션</b><span>구독자가 꺼져 있어도 브로커가 그 이름 앞으로 온 메시지를 보관하는 연결 방식.</span></div>

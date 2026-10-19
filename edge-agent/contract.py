@@ -2,7 +2,7 @@
 """contract.py — schema/edge_contract.json 을 런타임에 읽는다.
 
 docs/작업규칙.md §2: 계약값을 코드에 하드코딩하지 않는다. `1_000_000`, `144_500`,
-`13.62` 를 소스에 적으면 rev.9 가 바뀌었을 때 조용히 갈라진다.
+`13.62` 를 소스에 적으면 팀 연구가 바뀌었을 때 조용히 갈라진다.
 
 환경변수로 덮어쓰지 않는다 — 계약이지 설정이 아니다.
 """
@@ -19,7 +19,7 @@ DEFAULT_PATH = os.path.abspath(
 
 @dataclass(frozen=True, slots=True)
 class EdgeContract:
-    """엣지가 클라우드에 넘기는 계약. 전부 rev.9/config.py 에서 유도된 값이다."""
+    """엣지가 클라우드에 넘기는 계약. 전부 NeedSlack/config.py 에서 유도된 값이다."""
     uplink_bps: int
     payload_bytes: int
     cand_rate_hz: float
@@ -48,7 +48,7 @@ class EdgeContract:
         return self.uplink_bps / 8.0
 
     def rederive(self, payload_bytes: float) -> dict[str, float]:
-        """페이로드 크기만 바꿔 유도값을 다시 낸다. 식은 rev.9 `config.py` 의 `uplink_*` 함수와 같다.
+        """페이로드 크기만 바꿔 유도값을 다시 낸다. 식은 팀 연구 `config.py` 의 `uplink_*` 함수와 같다.
 
         계약은 동결이라 고치지 않는다 — 실측 페이로드가 계약 `S` 와 다를 때 그 차이가 상한을
         얼마나 옮기는지 **발견으로 병기**하는 데만 쓴다. `rederive(self.payload_bytes)` 는 계약 JSON 의

@@ -6,15 +6,15 @@
 무엇을 노트북에 굽는가 (설계결정-0002)
 -------------------------------------------------------------------------------
     tar 3개의 sha256        data/snapshots/*.sha256 — MinIO snapshot.json 과 같은지 여기서 먼저 확인한다
-    rev.9 학습·평가 코드     04_중앙AI/yolo_detector.py · apeval.py 원문 그대로,
+    팀 연구 학습·평가 코드     04_중앙AI/yolo_detector.py · apeval.py 원문 그대로,
                             y5_train_eval_axis2.py 의 collect_matches · ap_from_matches 원문 그대로
                             (각 원본의 sha256 을 함께 적는다 — 레시피가 바이트 단위로 같다는 증거)
-    rev.9 config 값         CLASSES · YOLO_IMGSZ (값만. config.py 는 윈도우 경로를 담고 있어 옮기지 않는다)
+    팀 연구 config 값         CLASSES · YOLO_IMGSZ (값만. config.py 는 윈도우 경로를 담고 있어 옮기지 않는다)
     오프라인 결과           runs_yolo/axis2/eval_axis2_mc.json 의 STA_B · DYN_B 와 DYN_B_vs_STA_B
 
-학습 인자는 rev.9 axis2 `_mc` 런의 args.yaml 과 같다 — epochs 16 · batch 32 · imgsz 640 · workers 2 ·
+학습 인자는 팀 연구 axis2 `_mc` 런의 args.yaml 과 같다 — epochs 16 · batch 32 · imgsz 640 · workers 2 ·
 ybase last.pt 에서 시작. 나머지(SGD · lr0 · 증강 끔 · amp 끔 …)는 yolo_detector.LOCKED_TRAIN_ARGS 가 강제한다.
-ultralytics 는 rev.9 와 같은 8.4.130 으로 고정한다(rev.9/08_이관/build_colab_nb.py).
+ultralytics 는 팀 연구와 같은 8.4.130 으로 고정한다(NeedSlack/08_이관/build_colab_nb.py).
 """
 from __future__ import annotations
 
@@ -35,10 +35,10 @@ OUT = os.path.join(_HERE, "colab_train.ipynb")
 SNAP = os.path.join(ROOT, "data", "snapshots")
 ARMS = ("STA_B", "DYN_B")
 SEEDS = (1, 2, 3)
-#: rev.9 runs_yolo/axis2/*_mc_s*/args.yaml 에서 읽은 값 (build 때 다시 대조한다)
+#: 팀 연구 runs_yolo/axis2/*_mc_s*/args.yaml 에서 읽은 값 (build 때 다시 대조한다)
 TRAIN = {"epochs": 16, "batch": 32, "imgsz": 640, "workers": 2}
 ULTRALYTICS = "8.4.130"
-BOOT, BOOT_SEED = 400, 20260901      # rev.9 y5 의 --boot 기본값 · rng 시드
+BOOT, BOOT_SEED = 400, 20260901      # 팀 연구 y5 의 --boot 기본값 · rng 시드
 
 
 def py(obj) -> str:
@@ -51,9 +51,9 @@ def sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def rev9_root() -> str:
+def team_root() -> str:
     import replay
-    return replay.rev9_root()
+    return replay.team_root()
 
 
 def read(path: str) -> str:
@@ -99,7 +99,7 @@ def expected_shas() -> dict[str, str]:
 
 
 def check_train_args(r9: str) -> None:
-    """굽는 값이 rev.9 가 실제로 쓴 args.yaml 과 같은지 — 여섯 런 전부."""
+    """굽는 값이 팀 연구가 실제로 쓴 args.yaml 과 같은지 — 여섯 런 전부."""
     for a in ARMS:
         for s in SEEDS:
             p = os.path.join(r9, "04_중앙AI", "runs_yolo", "axis2", f"{a}_mc_s{s}", "args.yaml")
@@ -122,7 +122,7 @@ def code(text: str) -> dict:
 
 
 def build() -> dict:
-    r9 = rev9_root()
+    r9 = team_root()
     cz = os.path.join(r9, "04_중앙AI")
     check_train_args(r9)
     shas = expected_shas()
@@ -138,7 +138,7 @@ def build() -> dict:
     offline = json.loads(read(os.path.join(cz, "runs_yolo", "axis2", "eval_axis2_mc.json")))
     off = {"STA_B": offline["conditions"]["STA_B"], "DYN_B": offline["conditions"]["DYN_B"],
            "DYN_B_vs_STA_B": offline["equivalence"]["DYN_B_vs_STA_B"],
-           "n_held_out": offline["n_held_out"], "source": "rev.9/04_중앙AI/runs_yolo/axis2/eval_axis2_mc.json"}
+           "n_held_out": offline["n_held_out"], "source": "NeedSlack/04_중앙AI/runs_yolo/axis2/eval_axis2_mc.json"}
     prov = {"rev9_sources_sha256": {k: sha(v.encode("utf-8")) for k, v in src.items()},
             "rev9_y5_sha256": sha(read(y5).encode("utf-8"))}
 
@@ -165,7 +165,7 @@ def build() -> dict:
 | 1–2 | Drive 연결 · tar 3개 찾기 · **sha256 대조** | 스냅샷과 한 바이트라도 다르면 |
 | 3 | 풀기 · 개수 점검 | 학습 2,449 · val 800 · held-out @@NHELD@@ 가 아니면 |
 | 4 | ultralytics @@ULT@@ 고정 설치 | 버전이 다르면 |
-| 5 | rev.9 학습·평가 코드를 **원문 그대로** 쓴다 | — |
+| 5 | 팀 연구 학습·평가 코드를 **원문 그대로** 쓴다 | — |
 | 6 | 6런 학습 — 런마다 가중치를 **즉시 Drive 에 저장** | — |
 | 7 | held-out 평가 — 런마다 결과를 Drive 에 저장 | — |
 | 8 | Δ mAP · 부트스트랩 CI(held-out 프레임 × 시드, @@BOOT@@회) · 오프라인 대조 → `m3_eval.json` | — |
@@ -237,7 +237,7 @@ for a in N:
     assert count(f'{STAGE}/ds-{a}/labels/train') == N[a]
 """, NHELD=str(off["n_held_out"]))),
 
-        md(put("## 4. 환경 — ultralytics @@ULT@@ 고정 (rev.9 와 같다)", ULT=ULTRALYTICS)),
+        md(put("## 4. 환경 — ultralytics @@ULT@@ 고정 (팀 연구와 같다)", ULT=ULTRALYTICS)),
         code(put("""
 !pip -q install ultralytics==@@ULT@@
 import torch, ultralytics
@@ -249,13 +249,13 @@ print(ENV)
 """, ULT=ULTRALYTICS)),
 
         md("""
-## 5. rev.9 학습·평가 코드 — 원문 그대로
+## 5. 팀 연구 학습·평가 코드 — 원문 그대로
 
-`yolo_detector.py` · `apeval.py` 는 rev.9 파일 **전체**, `m3_helpers.py` 의 두 함수는 `y5_train_eval_axis2.py` 에서
+`yolo_detector.py` · `apeval.py` 는 팀 연구 파일 **전체**, `m3_helpers.py` 의 두 함수는 `y5_train_eval_axis2.py` 에서
 **글자 그대로** 꺼낸 것이다. `config.py` 는 값 두 개만 옮긴다(원본은 윈도우 경로를 담고 있다).
 """),
         code(put("""
-CODE = '/content/rev9code'
+CODE = '/content/teamcode'
 os.makedirs(CODE, exist_ok=True)
 FILES = @@FILES@@
 PROVENANCE = @@PROV@@
@@ -270,19 +270,19 @@ sys.path.insert(0, CODE)
 import yolo_detector as YD
 import m3_helpers as H
 YD.assert_no_autotuning(YD.LOCKED_TRAIN_ARGS, where='notebook')
-print('rev.9 코드 준비 —', ', '.join(FILES))
+print('팀 연구 코드 준비 —', ', '.join(FILES))
 """, FILES=repr({
             **src,
-            "config.py": f"# rev.9 02_전처리/config.py 의 값 두 개 (build_colab_nb.py 가 옮김)\n"
+            "config.py": f"# 팀 연구 02_전처리/config.py 의 값 두 개 (build_colab_nb.py 가 옮김)\n"
                          f"CLASSES = {classes}\nYOLO_IMGSZ = {imgsz}\nDIR_LABELS = ''\n",
-            "m3_helpers.py": "# rev.9 04_중앙AI/y5_train_eval_axis2.py 에서 원문 그대로 꺼낸 함수\n"
+            "m3_helpers.py": "# 팀 연구 04_중앙AI/y5_train_eval_axis2.py 에서 원문 그대로 꺼낸 함수\n"
                              "import numpy as np\nfrom config import CLASSES\n\n\n" + helpers + "\n",
         }), PROV=py(prov))),
 
         md(put("""
 ## 6. 학습 — 6런 (2팔 × 3시드)
 
-`ybase` 에서 fine-tune. epochs @@EP@@ · batch @@BS@@ · imgsz @@IMG@@ · workers @@WK@@ — rev.9 axis2 `_mc` 런의 `args.yaml` 과 같다.
+`ybase` 에서 fine-tune. epochs @@EP@@ · batch @@BS@@ · imgsz @@IMG@@ · workers @@WK@@ — 팀 연구 axis2 `_mc` 런의 `args.yaml` 과 같다.
 val 은 tune 앞 800(진행 표시용). 가중치는 **last.pt** 만 쓴다(best.pt 금지 — 고정 에폭 규율).
 런이 끝날 때마다 `m3_results/runs/{ARM}-s{SEED}/` 에 가중치와 실제 쓰인 인자를 저장한다.
 """, EP=str(TRAIN["epochs"]), BS=str(TRAIN["batch"]), IMG=str(TRAIN["imgsz"]), WK=str(TRAIN["workers"]))),
@@ -335,7 +335,7 @@ for a, s in RUNS:
     print(f'{rid} 학습 {(time.time() - t0) / 60:.1f} 분 · args {h} → Drive 저장')
 """, TRAIN=py(TRAIN))),
 
-        md("## 7. held-out 평가 — rev.9 와 같은 AP 정의 (VOC all-points, IoU 0.5)"),
+        md("## 7. held-out 평가 — 팀 연구와 같은 AP 정의 (VOC all-points, IoU 0.5)"),
         code("""
 import numpy as np
 HELD_TOP = f'{STAGE}/eval-common'
@@ -375,8 +375,8 @@ for a, s in RUNS:
         md(put("""
 ## 8. Δ mAP · 부트스트랩 CI · 오프라인 대조 → `m3_eval.json`
 
-rev.9 y5 와 같은 절차 — held-out 프레임과 학습 시드를 **함께** 리샘플(paired), @@BOOT@@회, rng 시드 @@BS@@.
-오프라인 기준은 `rev.9/04_중앙AI/runs_yolo/axis2/eval_axis2_mc.json`.
+팀 연구 y5 와 같은 절차 — held-out 프레임과 학습 시드를 **함께** 리샘플(paired), @@BOOT@@회, rng 시드 @@BS@@.
+오프라인 기준은 `NeedSlack/04_중앙AI/runs_yolo/axis2/eval_axis2_mc.json`.
 ⚠ 숫자가 오프라인과 달라도 실패가 아니다 — 실패는 숫자가 **나오지 않는** 것이다(PRD).
 """, BOOT=str(BOOT), BS=str(BOOT_SEED))),
         code(put("""
@@ -416,7 +416,7 @@ with open(os.path.join(RESULTS, 'm3_eval.json'), 'w') as f:
     json.dump(res, f, indent=1, ensure_ascii=False)
 
 print()
-print(f"{'':10s}{'파이프라인':>22s}{'오프라인 (rev.9)':>22s}")
+print(f"{'':10s}{'파이프라인':>22s}{'오프라인 (팀 연구)':>22s}")
 for a in ('STA_B', 'DYN_B'):
     c, o = res['conditions'][a], OFFLINE[a]
     print(f"{a:10s}{c['mean']:>14.4f} ± {c['sd']:.4f}{o['mean']:>14.4f} ± {o['sd']:.4f}")

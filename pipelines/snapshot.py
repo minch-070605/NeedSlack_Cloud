@@ -8,18 +8,18 @@
 형식과 근거는 `docs/설계결정-0002-M3-학습데이터-이관.md`. 요약:
 
     ds-{ARM}.tar      images/train/{fid:05d}.jpg   ← MinIO 번들에서 잘라 sha256 재대조
-                      labels/train/{fid:05d}.txt   ← rev.9 nuScenes 정답
+                      labels/train/{fid:05d}.txt   ← 팀 연구 nuScenes 정답
                       lists/train.txt · manifest.jsonl · snapshot.json
     eval-common.tar   images|labels/{val,held_out}/ · weights/ybase_last.pt · lists/ · eval_common.json
 
 멈추는 조건 — 하나라도 어기면 아무것도 쓰지 않는다
 -------------------------------------------------------------------------------
-1. INDEXED 프레임 집합이 rev.9 정본 선별(`selections_axis2/{ARM}_mc_rate0.10_s*.npy`, 세 시드 동일)과
+1. INDEXED 프레임 집합이 팀 연구 정본 선별(`selections_axis2/{ARM}_mc_rate0.10_s*.npy`, 세 시드 동일)과
    다르다 — 파이프라인이 대조를 바꿨다는 뜻이다(수용 기준 3 의 데이터 쪽 절반)
-2. rev.9 가 실제로 학습에 쓴 목록(`lists/axis2_{ARM}_mc_s1_train.txt`)과 다르다
+2. 팀 연구가 실제로 학습에 쓴 목록(`lists/axis2_{ARM}_mc_s1_train.txt`)과 다르다
 3. 학습 프레임이 held-out 과 겹친다 · pool 밖이다(수용 기준 7)
 4. 한 스냅샷에 회수 기전·프로파일이 둘 이상 섞였다(설계결정-0001 §4)
-5. 번들에서 자른 바이트의 sha256 이 판정의 값 · rev.9 원본과 다르다
+5. 번들에서 자른 바이트의 sha256 이 판정의 값 · 팀 연구 원본과 다르다
 
 불변성 — 같은 스냅샷을 두 번 만들어도 같다
 -------------------------------------------------------------------------------
@@ -49,7 +49,7 @@ for _p in (os.path.join(ROOT, "edge-agent"), os.path.join(ROOT, "ingest"),
 
 import verdict as V         # noqa: E402
 
-#: rev.9 y5_train_eval_axis2.py — `tune_val = ids_where(rows, split="tune")[:800]`
+#: 팀 연구 y5_train_eval_axis2.py — `tune_val = ids_where(rows, split="tune")[:800]`
 N_VAL = 800
 OUT_DEFAULT = os.path.join(ROOT, "data", "snapshots")
 DATASET_PREFIX = "datasets"
@@ -59,9 +59,9 @@ class SnapshotError(RuntimeError):
     """멈추는 조건(머리말). 스냅샷을 만들지 않는다."""
 
 
-# ─────────────────────────────────────────────────────────── rev.9 고정 자산
+# ─────────────────────────────────────────────────────────── 팀 연구 고정 자산
 @dataclass(frozen=True)
-class Rev9:
+class TeamResearch:
     root: str
 
     @property
@@ -108,7 +108,7 @@ class Rev9:
         return by, tune
 
     def trained_list(self, arm: str) -> Optional[list[int]]:
-        """rev.9 가 실제로 학습에 쓴 목록. 없으면 None."""
+        """팀 연구가 실제로 학습에 쓴 목록. 없으면 None."""
         p = os.path.join(self.lists, f"axis2_{arm}_mc_s1_train.txt")
         if not os.path.exists(p):
             return None
@@ -142,10 +142,10 @@ def plan(arm: str, frames: list[dict], selection: Iterable[int], splits: dict[in
         raise SnapshotError(f"{vin}: 같은 frame_id 가 두 번 나온다 — 재생이 두 번 적재됐다")
     got = set(fids)
     if got != sel:
-        raise SnapshotError(f"{vin}: INDEXED {len(got):,} 프레임이 rev.9 정본 선별 {len(sel):,} 과 다르다 "
+        raise SnapshotError(f"{vin}: INDEXED {len(got):,} 프레임이 팀 연구 정본 선별 {len(sel):,} 과 다르다 "
                             f"(빠짐 {len(sel - got):,} · 더함 {len(got - sel):,})")
     if trained is not None and set(trained) != got:
-        raise SnapshotError(f"{vin}: rev.9 학습 목록 axis2_{arm}_mc_s1_train.txt 와 다르다")
+        raise SnapshotError(f"{vin}: 팀 연구 학습 목록 axis2_{arm}_mc_s1_train.txt 와 다르다")
     held = sorted(f for f in got if splits.get(f) == "held_out")
     if held:
         raise SnapshotError(f"{vin}: 학습 프레임 {len(held):,} 개가 held-out 이다 (예: {held[:3]})")
@@ -188,7 +188,7 @@ def extract(rows: list[dict], get_bundle: Callable[[str, str], bytes],
             if len(chunk) != r["length"] or sha256(chunk) != r["sha256"]:
                 raise SnapshotError(f"frame {r['frame_id']}: 번들 {key} 에서 자른 바이트의 sha256 이 판정과 다르다")
             if original is not None and chunk != original(r["frame_id"]):
-                raise SnapshotError(f"frame {r['frame_id']}: 번들의 바이트가 rev.9 원본과 다르다")
+                raise SnapshotError(f"frame {r['frame_id']}: 번들의 바이트가 팀 연구 원본과 다르다")
             out[r["frame_id"]] = chunk
     return out
 
@@ -254,7 +254,7 @@ def write_common_tar(path: str, val: list[int], held: list[int], image: Callable
 
 
 def eval_sets(splits: dict[int, str], tune: list[int]) -> tuple[list[int], list[int]]:
-    """rev.9 y5 와 같은 정의 — val = tune 앞 800, held-out = split 이 held_out 인 전부."""
+    """팀 연구 y5 와 같은 정의 — val = tune 앞 800, held-out = split 이 held_out 인 전부."""
     return tune[:N_VAL], sorted(f for f, s in splits.items() if s == "held_out")
 
 
@@ -323,7 +323,7 @@ def main(argv: list[str]) -> int:
     import replay
     from frames import FramesFile
 
-    r9 = Rev9(replay.rev9_root())
+    r9 = TeamResearch(replay.team_root())
     splits, tune = r9.splits()
     cj = _contract_json()
     split_seed = int(cj["constants"]["SPLIT_SEED"]["value"])
@@ -335,7 +335,7 @@ def main(argv: list[str]) -> int:
             weights = f.read()
         path = os.path.join(a.out, "eval-common.tar")
         sha, info = write_common_tar(path, val, held, r9.image, r9.label, weights,
-                                     {"split_seed": split_seed, "source": "rev.9 yolo_ds · ybase last.pt"})
+                                     {"split_seed": split_seed, "source": "팀 연구 yolo_ds · ybase last.pt"})
         with open(path + ".sha256", "w", encoding="utf-8") as f:
             f.write(f"{sha}  eval-common.tar\n")
         print(f"eval-common.tar  val {info['n_val']:,} · held-out {info['n_held_out']:,} · "
@@ -358,11 +358,11 @@ def main(argv: list[str]) -> int:
         selection = npyread.load_canonical_selection(r9.selections, arm, ff.frame_count)
     sig = _arm_signals()
     rows = plan(arm, frames, selection, splits, r9.trained_list(arm), sig["profile"]["sha"])
-    print(f"{vin}: {len(rows):,} 프레임 — rev.9 정본 선별 · 학습 목록과 일치 · held-out 과 겹침 0")
+    print(f"{vin}: {len(rows):,} 프레임 — 팀 연구 정본 선별 · 학습 목록과 일치 · held-out 과 겹침 0")
 
     s3 = aws.s3_client()
     images = extract(rows, lambda b, k: s3.get_object(Bucket=b, Key=k)["Body"].read(), r9.image)
-    print(f"  번들 {len({r['key'] for r in rows}):,} 개에서 {len(images):,} 장을 잘라 sha256 · rev.9 원본과 대조")
+    print(f"  번들 {len({r['key'] for r in rows}):,} 개에서 {len(images):,} 장을 잘라 sha256 · 팀 연구 원본과 대조")
 
     ds_id = V.dataset_id(arm)
     ds_bucket = aws.dataset_bucket()
@@ -381,7 +381,7 @@ def main(argv: list[str]) -> int:
                   Body=json.dumps(snap, ensure_ascii=False, indent=1, sort_keys=True).encode())
 
     import psycopg
-    # parity_verified: arm_signals.json 자기검증이 rev.9 value_score.py 와의 정수 일치와
+    # parity_verified: arm_signals.json 자기검증이 팀 연구 value_score.py 와의 정수 일치와
     # 두 팔 × 3시드 선별 재현을 확인했다(schema/gen_arm_signals.py). 그 결과를 그대로 싣는다.
     with psycopg.connect(os.environ["PG_DSN"]) as conn:
         state = register_pg(conn, arm, rows, manifest_uri, sig["profile"],

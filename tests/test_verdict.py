@@ -49,7 +49,7 @@ class TestRunModel(unittest.TestCase):
         self.assertEqual(len({V.run_id(a, s) for a in V.ARMS for s in V.SEEDS}), 6)
         self.assertEqual(len({V.dataset_id(a) for a in V.ARMS}), 2)
 
-    def test_selection_filename_matches_rev9(self):
+    def test_selection_filename_matches_team(self):
         self.assertEqual(V.selection_filename("STA_B", 3),
                          "STA_B_mc_rate0.10_s3.npy")
 

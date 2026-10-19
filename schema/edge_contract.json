@@ -3,12 +3,12 @@
   "_generated": "2026-09-21",
   "_generator": "schema/gen_edge_contract.py",
   "_source": {
-    "repo": "rev.9",
+    "repo": "NeedSlack (팀 연구)",
     "file": "02_전처리/config.py",
     "sha256_16": "9f8fa14b5c6bc6e4",
     "derivation": "01_문서/갈래A_전환.md §6 (업링크 예산 폐쇄)"
   },
-  "_warning": "손으로 고치지 말 것. rev.9 를 고치고 생성기를 다시 돌려라.",
+  "_warning": "손으로 고치지 말 것. 팀 연구를 고치고 생성기를 다시 돌려라.",
   "select_rate_inst": 0.1,
   "select_rate_p3": 0.05,
   "constants": {

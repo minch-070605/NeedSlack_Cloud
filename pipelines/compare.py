@@ -7,7 +7,7 @@
 왜 여기서 CI 를 다시 계산하지 않나
 -------------------------------------------------------------------------------
 부트스트랩(held-out 프레임 × 학습 시드, 400회)은 numpy 가 있어야 하는 계산량이고, 로컬 `.venv` 에는
-numpy 가 없다(구현설계_MVP.md §8 — 학습·평가는 Colab 에서만). 노트북이 rev.9 y5 와 같은 절차·같은 rng
+numpy 가 없다(구현설계_MVP.md §8 — 학습·평가는 Colab 에서만). 노트북이 팀 연구 y5 와 같은 절차·같은 rng
 시드로 계산해 온 값을 쓴다. 여기서 하는 일은 그 값이 **어느 데이터·어느 코드·어느 인자에서 나왔는지**를
 확인하고 계보에 묶는 것이다.
 
@@ -16,8 +16,8 @@ numpy 가 없다(구현설계_MVP.md §8 — 학습·평가는 Colab 에서만).
 1. 6런(2팔 × 3시드)이 다 있지 않다
 2. 결과가 가리키는 tar sha256 이 스냅샷(`data/snapshots/*.sha256` · MinIO snapshot.json)과 다르다
 3. 학습 인자 해시가 6런에서 하나가 아니다 · 고정 인자(epochs · batch · imgsz · SGD · mosaic 0 · amp 끔)와 다르다 (수용 기준 3)
-4. held-out 식별자가 rev.9 frame_index 의 held_out 과 다르다 (수용 기준 7 의 평가 쪽)
-5. 노트북에 실린 rev.9 코드의 sha256 이 지금 rev.9 파일과 다르다
+4. held-out 식별자가 팀 연구 frame_index 의 held_out 과 다르다 (수용 기준 7 의 평가 쪽)
+5. 노트북에 실린 팀 연구 코드의 sha256 이 지금 팀 연구 파일과 다르다
 6. 조건별 평균이 런별 mAP 와 맞지 않는다
 
 ⚠ 숫자가 오프라인과 달라도 **멈추지 않는다** — 그것이 결과다(PRD "실패 판정은 숫자가 안 나오는 것").
@@ -44,7 +44,7 @@ IN_CANDIDATES = (os.path.join(ROOT, "data", "m3", "m3_eval.json"),
                  os.path.join(ROOT, "data", "m3_results", "m3_eval.json"))
 OUT_DEFAULT = os.path.join(ROOT, "data", "m3", "compare.json")
 RUNS = tuple(V.run_id(a, s) for a in V.ARMS for s in V.SEEDS)
-#: 고정 인자 — 노트북 train.json 의 train_args(문자열 값)와 대조한다. 출처: rev.9 axis2 _mc args.yaml
+#: 고정 인자 — 노트북 train.json 의 train_args(문자열 값)와 대조한다. 출처: 팀 연구 axis2 _mc args.yaml
 LOCKED = {"epochs": "16", "batch": "32", "imgsz": "640", "optimizer": "SGD",
           "mosaic": "0.0", "amp": "False", "deterministic": "True", "workers": "2"}
 
@@ -59,7 +59,7 @@ def sha256(b: bytes) -> str:
 
 # ─────────────────────────────────────────────────────────── 1. 검증
 def validate(m3: dict, tar_shas: dict[str, str], held_ids_sha: str, n_held: int,
-             rev9_src_shas: dict[str, str]) -> list[tuple[str, str]]:
+             team_src_shas: dict[str, str]) -> list[tuple[str, str]]:
     """멈추는 조건 1–6. 통과한 항목 (이름, 근거) 목록을 돌려준다."""
     ok = []
     runs = m3.get("runs", {})
@@ -87,14 +87,14 @@ def validate(m3: dict, tar_shas: dict[str, str], held_ids_sha: str, n_held: int,
     ok.append(("학습 인자 해시 6런 동일", next(iter(shas))))
 
     if m3.get("n_held_out") != n_held or m3.get("held_out_ids_sha256") != held_ids_sha:
-        raise CompareError("held-out 식별자가 rev.9 frame_index 와 다르다")
+        raise CompareError("held-out 식별자가 팀 연구 frame_index 와 다르다")
     ok.append(("held-out 식별자", f"{n_held:,} 프레임"))
 
     got = m3.get("provenance", {}).get("rev9_sources_sha256", {})
-    for name, want in rev9_src_shas.items():
+    for name, want in team_src_shas.items():
         if got.get(name) != want:
-            raise CompareError(f"노트북에 실린 {name} 이 지금 rev.9 와 다르다")
-    ok.append(("rev.9 학습·평가 코드 sha256", ", ".join(sorted(rev9_src_shas))))
+            raise CompareError(f"노트북에 실린 {name} 이 지금 팀 연구와 다르다")
+    ok.append(("팀 연구 학습·평가 코드 sha256", ", ".join(sorted(team_src_shas))))
 
     for a in V.ARMS:
         per = [runs[V.run_id(a, s)]["mAP50"] for s in V.SEEDS]
@@ -108,7 +108,7 @@ def validate(m3: dict, tar_shas: dict[str, str], held_ids_sha: str, n_held: int,
 
 # ─────────────────────────────────────────────────────────── 2. 대조
 def summarize(m3: dict) -> dict:
-    """파이프라인 결과와 오프라인(rev.9) 을 나란히. 판정은 내리지 않고 사실만 모은다."""
+    """파이프라인 결과와 오프라인(팀 연구) 을 나란히. 판정은 내리지 않고 사실만 모은다."""
     off = m3["offline"]
     e, oe = m3["DYN_B_vs_STA_B"], off["DYN_B_vs_STA_B"]
     arms = {}
@@ -135,7 +135,7 @@ def summarize(m3: dict) -> dict:
 
 def render(summary: dict, checks: list[tuple[str, str]], reg: str) -> str:
     L = ["검증 — 전부 통과"] + [f"  ✓ {k:28s} {v}" for k, v in checks] + ["", f"계보 {reg}", ""]
-    L.append(f"{'':8s}{'파이프라인 (mean ± sd)':>26s}{'오프라인 rev.9':>22s}{'시드별 차이':>24s}")
+    L.append(f"{'':8s}{'파이프라인 (mean ± sd)':>26s}{'오프라인 팀 연구':>22s}{'시드별 차이':>24s}")
     for a, d in summary["arms"].items():
         p, o = d["pipeline"], d["offline"]
         diff = " ".join(f"{x:+.4f}" for x in d["per_seed_diff"])
@@ -196,11 +196,11 @@ def register(conn, m3: dict, ds_ids: Optional[dict[str, str]] = None, run_prefix
 
 # ─────────────────────────────────────────────────────────── 실행
 def local_expectations() -> tuple[dict[str, str], str, int, dict[str, str]]:
-    """검증에 쓸 기대값 — 스냅샷 tar sha256 · held-out 식별자 · rev.9 코드 sha256."""
+    """검증에 쓸 기대값 — 스냅샷 tar sha256 · held-out 식별자 · 팀 연구 코드 sha256."""
     import build_colab_nb as NB
     import snapshot as SN
     import replay
-    r9 = SN.Rev9(replay.rev9_root())
+    r9 = SN.TeamResearch(replay.team_root())
     splits, tune = r9.splits()
     _, held = SN.eval_sets(splits, tune)
     cz = os.path.join(r9.root, "04_중앙AI")

@@ -2,9 +2,9 @@
   "_schema": "needslack.arm_signals/1",
   "_generated": "2026-09-22",
   "_generator": "schema/gen_arm_signals.py",
-  "_warning": "손으로 고치지 말 것. rev.9 를 고치고 생성기를 다시 돌려라.",
+  "_warning": "손으로 고치지 말 것. 팀 연구를 고치고 생성기를 다시 돌려라.",
   "_source": {
-    "repo": "rev.9",
+    "repo": "NeedSlack (팀 연구)",
     "repro_cmd": "python 04_중앙AI/y4_select_axis2.py --load multicam --out-suffix _mc --rate 0.1 --seeds 1 2 3 --t-frame 50.0 --gmacs-a 6.0 --gmacs-b 14.0",
     "sha256_16": {
       "y4_select_axis2": "c63ec9a255d1c98e",
@@ -103,7 +103,7 @@
         "rate": 0.7835
       }
     },
-    "note": "frames.bin 의 conf_q8·det_count 가 rev.9 interim 현재본과 다르다. 판정에는 frames.bin(보드 레코드)을 싣는다. w_conf=0 이라 value_score 는 불변(자기검증), 축 2 선별은 타일 YOLO 점수라 대조와 무관"
+    "note": "frames.bin 의 conf_q8·det_count 가 팀 연구 interim 현재본과 다르다. 판정에는 frames.bin(보드 레코드)을 싣는다. w_conf=0 이라 value_score 는 불변(자기검증), 축 2 선별은 타일 YOLO 점수라 대조와 무관"
   },
   "_selfcheck": {
     "selections_reproduced": [

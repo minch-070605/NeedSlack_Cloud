@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-"""edge_contract.json 생성 — rev.9 config.py 에서 업링크 계약을 스냅샷으로 고정한다.
+"""edge_contract.json 생성 — 팀 연구 config.py 에서 업링크 계약을 스냅샷으로 고정한다.
 
 왜 스냅샷인가
 -------------------------------------------------------------------------------
-이 클라우드 프로젝트는 rev.9 를 **import 하지 않는다.** rev.9 는 논문/경진대회
+이 클라우드 프로젝트는 팀 연구를 **import 하지 않는다.** 팀 연구는 논문/경진대회
 산출물로 동결됐고, 클라우드는 수명주기가 다른 별도 프로젝트다. 그러나 대역·지연·
-큐 용량은 rev.9 가 유도한 값이 유일한 진실이므로, 손으로 옮겨 적는 대신 이 스크립트가
+큐 용량은 팀 연구가 유도한 값이 유일한 진실이므로, 손으로 옮겨 적는 대신 이 스크립트가
 **config.py 를 실제로 실행해** 값을 뽑아 JSON 으로 굳힌다.
 
-rev.9 의 "문서를 빌드 산출물로 취급" 규율(gen_results_rev10.py)과 같은 장치다 —
-수치를 바꾸려면 rev.9 를 고치고 이 스크립트를 다시 돌려야 한다.
+팀 연구의 "문서를 빌드 산출물로 취급" 규율(gen_results_rev10.py)과 같은 장치다 —
+수치를 바꾸려면 팀 연구를 고치고 이 스크립트를 다시 돌려야 한다.
 
 사용
 -------------------------------------------------------------------------------
-    python gen_edge_contract.py                 # 기본 경로로 rev.9 탐색
+    python gen_edge_contract.py                 # 기본 경로로 팀 연구 탐색
     python gen_edge_contract.py <config.py 디렉터리>
 
-REV9 경로가 바뀌면 --root 로 넘기거나 REV9_PREPROC 환경변수를 쓴다.
+팀 연구 경로가 바뀌면 --root 로 넘기거나 TEAM_PREPROC 환경변수를 쓴다.
 """
 import hashlib
 import io
@@ -27,7 +27,7 @@ from datetime import date
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PREPROC = os.path.abspath(
-    os.path.join(_HERE, "..", "..", "rev.9", "02_전처리"))
+    os.path.join(_HERE, "..", "..", "팀 연구", "02_전처리"))
 OUT = os.path.join(_HERE, "edge_contract.json")
 
 SCALARS = [
@@ -61,11 +61,11 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     check_only = "--check" in sys.argv
     root = (args[0] if args
-            else os.environ.get("REV9_PREPROC", DEFAULT_PREPROC))
+            else os.environ.get("TEAM_PREPROC", DEFAULT_PREPROC))
     cfg_path = os.path.join(root, "config.py")
     if not os.path.exists(cfg_path):
         sys.exit(f"config.py 를 찾지 못했다: {cfg_path}\n"
-                 f"경로를 인자나 REV9_PREPROC 로 넘겨라.")
+                 f"경로를 인자나 TEAM_PREPROC 로 넘겨라.")
 
     sys.path.insert(0, root)
     import config as c                                    # noqa: E402
@@ -78,12 +78,12 @@ def main():
         "_generated": str(date.today()),
         "_generator": "schema/gen_edge_contract.py",
         "_source": {
-            "repo": "rev.9",
+            "repo": "NeedSlack (팀 연구)",
             "file": "02_전처리/config.py",
             "sha256_16": src_sha,
             "derivation": "01_문서/갈래A_전환.md §6 (업링크 예산 폐쇄)",
         },
-        "_warning": "손으로 고치지 말 것. rev.9 를 고치고 생성기를 다시 돌려라.",
+        "_warning": "손으로 고치지 말 것. 팀 연구를 고치고 생성기를 다시 돌려라.",
         "select_rate_inst": c.SELECT_RATE[0],
         "select_rate_p3": c.SELECT_RATE[1],
         "constants": {},
@@ -114,7 +114,7 @@ def main():
     b = doc["derived"]["uplink_max_drive_duty"]["value"] * 24.0
     assert abs(a - b) < 1e-6, (
         f"큐 용량이 듀티 상한과 불일치: {a:.4f} h vs {b:.4f} h. "
-        f"rev.9 §6-3 이 기각한 초안 상태다.")
+        f"팀 연구 §6-3 이 기각한 초안 상태다.")
     doc["_selfcheck"] = {
         "queue_vs_duty_hours": round(a, 6), "passed": True}
 
@@ -126,7 +126,7 @@ def main():
         old_sha = cur.get("_source", {}).get("sha256_16")
         print(f"config.py sha[:16]  기록 {old_sha}  현재 {src_sha}")
         if old_sha != src_sha:
-            sys.exit("FAIL  rev.9/config.py 가 바뀌었다. "
+            sys.exit("FAIL  NeedSlack/config.py 가 바뀌었다. "
                      "`python gen_edge_contract.py` 로 재생성하라.")
         drift = [k for k, v in doc["derived"].items()
                  if abs(v["value"] - cur["derived"][k]["value"]) > 1e-9]

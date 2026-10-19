@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""npyread.py — rev.9 선별 배열(.npy)을 표준 라이브러리만으로 읽는다.
+"""npyread.py — 팀 연구 선별 배열(.npy)을 표준 라이브러리만으로 읽는다.
 
 왜 numpy 를 안 쓰는가
 -------------------------------------------------------------------------------
@@ -81,7 +81,7 @@ def load_selection(path: str, n_frames: int) -> list[int]:
     if not idx:
         raise ValueError(f"{path}: 선별이 비었다")
     if idx != sorted(idx):
-        raise ValueError(f"{path}: 정렬돼 있지 않다 — rev.9 가 np.sort 로 저장한다")
+        raise ValueError(f"{path}: 정렬돼 있지 않다 — 팀 연구가 np.sort 로 저장한다")
     if len(set(idx)) != len(idx):
         raise ValueError(f"{path}: 중복 인덱스가 있다")
     if idx[0] < 0 or idx[-1] >= n_frames:
@@ -103,7 +103,7 @@ def load_canonical_selection(base_dir: str, arm: str, n_frames: int,
                              rate: float = 0.10) -> list[int]:
     """팔의 정본 선별을 읽고, **세 시드가 실제로 동일한지 검사한다.**
 
-    rev.9 는 `g = 1.0` 이라 pool 이 전부 채점되고, 따라서
+    팀 연구는 `g = 1.0` 이라 pool 이 전부 채점되고, 따라서
     `y4_select_axis2.select()` 의 무작위 채움(`take < budget`)을 타지 않아
     선별이 시드와 무관하게 결정적이다. 이 프로젝트의 런 모델(재생 2회 · 학습 6런)이
     **그 사실 위에 서 있으므로**, 사실이 아니게 되는 순간 큰 소리로 실패해야 한다.

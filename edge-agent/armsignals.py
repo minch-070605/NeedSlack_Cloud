@@ -2,7 +2,7 @@
 """armsignals.py — schema/arm_signals.json 을 런타임에 읽는다 (stdlib).
 
 팔별 가속기 산출(tiles_scored · tile_mask)과 value_score 는 frames.bin 에 없고,
-rev.9 에서 numpy 로만 재현된다. `schema/gen_arm_signals.py` 가 그것을 스냅샷으로 굳혔고
+팀 연구에서 numpy 로만 재현된다. `schema/gen_arm_signals.py` 가 그것을 스냅샷으로 굳혔고
 (두 팔 × 3시드 선별 재현을 자기검증), 재생기는 이 파일만 읽는다.
 """
 from __future__ import annotations
@@ -52,7 +52,7 @@ class ArmSignals:
 
 def load(arm: str, path: str = DEFAULT_PATH) -> ArmSignals:
     if not os.path.exists(path):
-        raise FileNotFoundError(f"{path} 가 없다. rev.9 venv 로 "
+        raise FileNotFoundError(f"{path} 가 없다. 팀 연구 venv 로 "
                                 f"`schema/gen_arm_signals.py` 를 돌려 생성하라.")
     with open(path, encoding="utf-8") as f:
         return ArmSignals(json.load(f), arm)

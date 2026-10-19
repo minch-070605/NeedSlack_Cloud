@@ -280,7 +280,7 @@ brief_strip = "".join(
     f'<span class="kd">{d}</span></div>' for n, v, u, d in BRIEF_CONSTS)
 
 if CFG["hero"] == "arch":
-    MAST = f'''<p class="tagline">NeedSlack rev.10 <i></i> 설계 분석 <i></i> 2026-09-20</p>
+    MAST = f'''<p class="tagline">NeedSlack <i></i> 설계 분석 <i></i> 2026-09-20</p>
     <h1>버려지던 슬랙으로 고른 데이터를, 클라우드까지 옮기는 법</h1>
     <p class="dek">엣지 하드웨어 가속기가 프레임 안에서 내린 선별 판정을 AWS의 수집·저장·재학습·OTA
       루프로 잇는 통합 아키텍처. 새 가정을 만들지 않고, 프로젝트가 이미 닫아 놓은 업링크 예산을

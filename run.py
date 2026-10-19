@@ -8,7 +8,7 @@
     down       로컬 스택 정지 (데이터 유지)                  docker compose down
     bootstrap  버킷·테이블·PG 스키마 생성 (멱등)             infra/bootstrap/01_create.py
     test       단위 테스트                                   unittest discover -s tests
-    contract   계약·팔별 신호 스냅샷이 rev.9 와 맞는지 확인  gen_edge_contract.py --check
+    contract   계약·팔별 신호 스냅샷이 팀 연구와 맞는지 확인  gen_edge_contract.py --check
                                                              gen_arm_signals.py --check
     replay ARM [--dry-run] [--limit N] [--speed X]
                차량 시뮬레이터 — 한 팔의 pool 후보 전량 재생  edge-agent/replay.py

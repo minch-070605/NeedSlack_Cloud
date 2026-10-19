@@ -12,7 +12,7 @@ import os
 import unittest
 
 _R = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-_SKIP = ("rev.9", ".git", ".venv")
+_SKIP = ("팀 연구", ".git", ".venv")
 
 
 def _ps1_files():

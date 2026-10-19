@@ -16,7 +16,7 @@ minio/
 pgdata/
 dynamodb-local/
 
-# 재생 입력 · 대용량 산출물 (rev.9 에서 읽는다. 복사하지 않는다)
+# 재생 입력 · 대용량 산출물 (팀 연구에서 읽는다. 복사하지 않는다)
 *.bin
 *.npy
 *.pt
@@ -28,7 +28,7 @@ dynamodb-local/
 # 공개 저장소에 두지 않는 것
 # - AI 세션 절차 (규칙은 docs/작업규칙.md)
 CLAUDE.md
-# - rev.9(경진대회 팀 연구) 코드가 원문 그대로 실린다. run.py notebook 으로 굽는다
+# - 경진대회 팀 연구 코드가 원문 그대로 실린다. run.py notebook 으로 굽는다
 pipelines/colab_train.ipynb
 docs/_build/
 .claude/

@@ -74,7 +74,7 @@ M4  AWS 수직 절단면
 
 ### 2-1. 판정 레코드
 
-원형은 `rev.9/02_전처리/s7_export_board.py` 의 `REC_FMT = "<II4B"` (12 B) 이고,
+원형은 `NeedSlack/02_전처리/s7_export_board.py` 의 `REC_FMT = "<II4B"` (12 B) 이고,
 거기에 전역화 필드와 `설계결정-0001 §4` 의 기전 필드를 더한다.
 
 | 필드 | 형 | 출처 | 비고 |
@@ -96,7 +96,7 @@ M4  AWS 수직 절단면
 | `profile_sha` | str(16) | `need_profile.json` 해시 | 재현성 앵커 |
 | `payload` | obj \| null | 업링크 | `{bucket, key, offset, len, sha256}` |
 
-**MVP 의 기전 필드.** 선별 배열은 rev.9 `y4_select_axis2.py` 의 파이썬 슬랙 모형이
+**MVP 의 기전 필드.** 선별 배열은 팀 연구 `y4_select_axis2.py` 의 파이썬 슬랙 모형이
 만들었다. 팔마다 기전이 다르다 — `DYN_B` 는 `preempt_resume`(창에서 `L_pre` 를 빼지 않는
 `k → ∞` 선점형의 이상화), `STA_B` 는 `static_reserve`(고정 창). `granule_k` 는 **`null`** —
 헤드라인이 `k → ∞` 가정 위에 있어(설계결정-0001 §3-3) 정수로 적을 값이 없고, `null` 이
@@ -136,9 +136,9 @@ PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶
 ### 2-4. 재생 규약 — 후보 전량을 재생하고, 선별분만 올린다
 
 ```
-선별 파일  rev.9/04_중앙AI/selections_axis2/{ARM}_mc_rate0.10_s{SEED}.npy
+선별 파일  NeedSlack/04_중앙AI/selections_axis2/{ARM}_mc_rate0.10_s{SEED}.npy
            → 정렬된 int64 전역 프레임 인덱스 배열 (약 2,449개). 불리언 마스크가 아니다.
-원본       rev.9/05_데이터셋/board/frames.bin
+원본       NeedSlack/05_데이터셋/board/frames.bin
            → 16 B 헤더 + 34,149 × (12 B 레코드 + 128×128 픽셀)
 ```
 
@@ -150,11 +150,11 @@ PENDING ──(S3 이벤트)──▶ UPLOADED ──(체크섬 통과)──▶
 
 | 항목 | 규약 |
 |---|---|
-| 팔별 신호 | `tiles_scored`·`tile_mask`·`value_score` 는 `schema/arm_signals.json` 에서 읽는다. rev.9 가 numpy 난수로 순위 정합한 C_main 에서만 나오므로, `schema/gen_arm_signals.py` 가 rev.9 venv 로 한 번 굳힌다(두 팔 × 3시드 선별 재현을 자기검증) |
+| 팔별 신호 | `tiles_scored`·`tile_mask`·`value_score` 는 `schema/arm_signals.json` 에서 읽는다. 팀 연구가 numpy 난수로 순위 정합한 C_main 에서만 나오므로, `schema/gen_arm_signals.py` 가 팀 연구 venv 로 한 번 굳힌다(두 팔 × 3시드 선별 재현을 자기검증) |
 | 판정 평면 | **선별분만** 판정으로 발행. 모의 1초 배치(보고서 §1-2) |
 | 텔레메트리 | 5분 주기 집계 — 후보 수 · `value_score>>5` 분포 · 타일 수 분포 · 큐 점유. 주차 배출 끝에 `final=true` 1건. 형식은 `verdict.Telemetry` |
 | 드롭 보고 | 즉시 드롭된 선별 프레임은 판정을 내지 않고 텔레메트리 `dropped_frame_uuids` 로 알린다. 수집기가 DROPPED 를 기록한다. 판정의 `selected ⇒ payload` 불변식을 지킨다 |
-| 페이로드 | rev.9 `yolo_ds/images/all/<frame_id:05d>.jpg` **실물 JPEG**. 큐는 실제 바이트 수를 과금한다 |
+| 페이로드 | 팀 연구 `yolo_ds/images/all/<frame_id:05d>.jpg` **실물 JPEG**. 큐는 실제 바이트 수를 과금한다 |
 | 번들 | 35프레임(보고서 §1-2). 큐 투입 시점에 `key/offset/length/sha256` 이 정해져 판정에 실린다. 객체는 **마지막 프레임이 링크를 빠져나간 시각**에 PUT — 클라우드가 관측하는 도착 지연의 기준. 키 `vin={vin}/boot={boot_id}/session={NNNN}/bundle-{NNNNN}.bin` |
 | 시각 | 차량이 내보내는 시각(`t_frame_utc` · `sent_at` · 번들 메타 `t-put-utc`)은 전부 **모의 시각의 UTC 환산**이다. 가속 재생에서 클라우드 벽시계로 도착 지연을 재면 틀린다 |
 | 주차 | 주행이 끝나면 `UPLINK_LINK_UP_WHEN_PARKED` 가정 아래 큐가 빌 때까지 배출한다 |
@@ -312,7 +312,7 @@ needslack-cloud/
 ├ docs/
 ├ schema/
 │   ├ edge_contract.json  gen_edge_contract.py
-│   ├ arm_signals.json  gen_arm_signals.py   ← 팔별 가속기 산출 스냅샷 (rev.9 venv 로 생성)
+│   ├ arm_signals.json  gen_arm_signals.py   ← 팔별 가속기 산출 스냅샷 (팀 연구 venv 로 생성)
 │   ├ verdict.py                  ← 판정 레코드 정의 + frame_uuid (단일 소스)
 │   ├ ddb_table.json              ← DynamoDB 테이블/GSI 정의
 │   └ pg/001_init.sql  001_init.down.sql
@@ -321,7 +321,7 @@ needslack-cloud/
 │   ├ uplink.py                   토큰버킷 · store&forward · 즉시 드롭
 │   ├ contract.py                 edge_contract.json 로더
 │   ├ armsignals.py               arm_signals.json 로더
-│   └ frames.py  npyread.py       rev.9 frames.bin · .npy 리더 (stdlib)
+│   └ frames.py  npyread.py       팀 연구 frames.bin · .npy 리더 (stdlib)
 ├ ingest/
 │   ├ store.py                    키 규약 · 상태 전이 (DynamoTable · MemoryTable)
 │   ├ collector.py                판정·텔레메트리 MQTT → DynamoDB
@@ -329,7 +329,7 @@ needslack-cloud/
 │   └ reconciler.py               S3 이벤트 · 버킷 대조 · UPLOADED 스윕 → 체크섬 → INDEXED
 ├ pipelines/
 │   ├ snapshot.py                 INDEXED → 대조·추출 → tar · manifest · PG 계보 (설계결정-0002)
-│   ├ colab_train.ipynb           재학습 (rev.9/08_이관 재사용)
+│   ├ colab_train.ipynb           재학습 (NeedSlack/08_이관 재사용)
 │   ├ evaluate.py                 mAP + 부트스트랩 CI
 │   └ compare.py                  Δ 대조표
 ├ infra/
@@ -349,7 +349,7 @@ needslack-cloud/
 ## 8. 의존성 — 확정
 
 `docs/작업규칙.md §4` 에 따라 승인된 것만 쓴다. 파이썬 의존성은 `requirements.txt` 가 단일
-소스이고, 이 프로젝트 전용 `.venv` 에 설치한다(rev.9 venv 와 공유하지 않는다).
+소스이고, 이 프로젝트 전용 `.venv` 에 설치한다(팀 연구 venv 와 공유하지 않는다).
 
 | # | 항목 | 결정 | 이유 |
 |---|---|---|---|

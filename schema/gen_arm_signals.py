@@ -9,22 +9,22 @@
     tile_mask      채점한 타일의 비트맵 (타일 우선순위 순으로 상위 tiles_scored 개)
     value_score    need_profile 가치 함수 (`03_가치함수/value_score.py` 골든과 정수 일치)
 
-tiles_scored 는 rev.9 `y4_select_axis2.py` 가 **numpy 난수로 순위 정합한 C_main** 에서
+tiles_scored 는 팀 연구 `y4_select_axis2.py` 가 **numpy 난수로 순위 정합한 C_main** 에서
 나오므로 표준 라이브러리로는 재현할 수 없다. 그래서 edge_contract.json 과 같은 방식으로
-rev.9 코드를 **실제로 실행해** 값을 뽑고 JSON 으로 굳힌다. 재생기는 이 JSON 만 읽는다
-(stdlib, rev.9 import 없음).
+팀 연구 코드를 **실제로 실행해** 값을 뽑고 JSON 으로 굳힌다. 재생기는 이 JSON 만 읽는다
+(stdlib, 팀 연구 import 없음).
 
 자기 검증 — 틀린 스냅샷을 쓰지 않는다
 -------------------------------------------------------------------------------
-1. 같은 입력으로 `y4.select()` 를 다시 돌려 **두 팔 × 3시드 선별이 rev.9 `.npy` 와
+1. 같은 입력으로 `y4.select()` 를 다시 돌려 **두 팔 × 3시드 선별이 팀 연구 `.npy` 와
    바이트 단위로 같은지** 확인한다. 같지 않으면 운용점을 잘못 읽은 것이다.
 2. value_score 는 **판정에 싣는 신호(frames.bin 레코드) + raw_sad** 로 계산한다 — 보드의
-   curate.c 가 자기 레코드로 계산하는 것과 같은 입력이다. 그 값이 rev.9 interim 입력으로
+   curate.c 가 자기 레코드로 계산하는 것과 같은 입력이다. 그 값이 팀 연구 interim 입력으로
    계산한 값과 **전 프레임 같은지** 확인한다.
 
    ⚠ frames.bin 의 conf_q8·det_count 는 interim 현재본(`conf_q8.npy`·`det_count.npy`)과
      다르다(일치율은 산출물 `_findings` 에 기록). mean_p·kinematic_u8 은 전부 같다.
-     rev.9 는 동결이라 고치지 않는다. need_profile 이 w_conf = 0 이라 value_score 에는
+     팀 연구는 동결이라 고치지 않는다. need_profile 이 w_conf = 0 이라 value_score 에는
      영향이 없고(검증 2 가 그것을 확인한다), 축 2 선별은 타일 YOLO 점수로 매겨 대조에도
      영향이 없다.
 3. frames.bin 의 frame_id 가 전역 인덱스(= frame_index.csv 행 순서)와 같은지 확인한다.
@@ -34,13 +34,13 @@ rev.9 코드를 **실제로 실행해** 값을 뽑고 JSON 으로 굳힌다. 재
 
 사용
 -------------------------------------------------------------------------------
-    # 생성 — numpy 가 필요하다. rev.9 venv 로 돌린다 (이 프로젝트 .venv 에 numpy 를 넣지 않는다)
-    <rev.9 venv>/Scripts/python schema/gen_arm_signals.py
+    # 생성 — numpy 가 필요하다. 팀 연구 venv 로 돌린다 (이 프로젝트 .venv 에 numpy 를 넣지 않는다)
+    <팀 연구 venv>/Scripts/python schema/gen_arm_signals.py
 
-    # 점검 — stdlib 만. rev.9 원천 파일의 sha 가 기록과 같은지만 본다. 파일을 쓰지 않는다
+    # 점검 — stdlib 만. 팀 연구 원천 파일의 sha 가 기록과 같은지만 본다. 파일을 쓰지 않는다
     python schema/gen_arm_signals.py --check
 
-rev.9 경로가 다르면 REV9_ROOT 환경변수로 넘긴다.
+팀 연구 경로가 다르면 TEAM_ROOT 환경변수로 넘긴다.
 """
 import hashlib
 import io
@@ -50,11 +50,11 @@ import struct
 import sys
 from datetime import date
 
-sys.dont_write_bytecode = True          # rev.9 는 동결이다. __pycache__ 도 남기지 않는다
+sys.dont_write_bytecode = True          # 팀 연구는 동결이다. __pycache__ 도 남기지 않는다
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-REV9 = os.path.abspath(os.environ.get(
-    "REV9_ROOT", os.path.join(_HERE, "..", "..", "rev.9")))
+TEAM = os.path.abspath(os.environ.get(
+    "TEAM_ROOT", os.path.join(_HERE, "..", "..", "NeedSlack")))
 OUT = os.path.join(_HERE, "arm_signals.json")
 
 ARMS = ("STA_B", "DYN_B")
@@ -63,7 +63,7 @@ SEEDS = (1, 2, 3)
 #: DYN_B 는 k→∞ 선점형의 이상화이고, STA_B 는 고정 창의 정적 예약이다.
 RECLAIM = {"DYN_B": "preempt_resume", "STA_B": "static_reserve"}
 
-#: 기록할 rev.9 원천. --check 가 이 sha 들을 비교한다.
+#: 기록할 팀 연구 원천. --check 가 이 sha 들을 비교한다.
 SOURCES = {
     "y4_select_axis2":  "04_중앙AI/y4_select_axis2.py",
     "summary_mc":       "04_중앙AI/selections_axis2/summary_mc.json",
@@ -80,7 +80,7 @@ for _a in ARMS:
 
 def sha16(rel: str) -> str:
     """파일 sha256 앞 16자. frames.bin 은 560 MB 라 앞 16 MiB 만 본다(헤더·초반 레코드 변경 감지)."""
-    p = os.path.join(REV9, rel)
+    p = os.path.join(TEAM, rel)
     h = hashlib.sha256()
     with open(p, "rb") as f:
         if rel.endswith("frames.bin"):
@@ -107,19 +107,19 @@ def check() -> None:
     rec = cur["_source"]["sha256_16"]
     bad = [k for k, rel in SOURCES.items() if rec.get(k) != sha16(rel)]
     if bad:
-        sys.exit(f"FAIL  rev.9 원천이 바뀌었다: {', '.join(bad)}. 재생성 여부를 먼저 정하라.")
-    print(f"OK    rev.9 원천 {len(SOURCES)} 개 sha 일치 · 풀 {len(cur['pool_frame']):,} 프레임")
+        sys.exit(f"FAIL  팀 연구 원천이 바뀌었다: {', '.join(bad)}. 재생성 여부를 먼저 정하라.")
+    print(f"OK    팀 연구 원천 {len(SOURCES)} 개 sha 일치 · 풀 {len(cur['pool_frame']):,} 프레임")
 
 
 def generate() -> None:
-    import numpy as np                                        # rev.9 venv 에만 있다
+    import numpy as np                                        # 팀 연구 venv 에만 있다
 
     for rel in ("04_중앙AI", "03_가치함수"):
-        sys.path.insert(0, os.path.join(REV9, rel))
+        sys.path.insert(0, os.path.join(TEAM, rel))
     import y4_select_axis2 as Y4                              # noqa: E402  (읽기 전용 실행)
     import value_score as VS                                  # noqa: E402
 
-    summ = json.load(io.open(os.path.join(REV9, SOURCES["summary_mc"]), encoding="utf-8"))
+    summ = json.load(io.open(os.path.join(TEAM, SOURCES["summary_mc"]), encoding="utf-8"))
     a = summ["args"]
     sig, _rows = Y4.load_signals()
     cm, tr = Y4.c_main_rank_matched(sig["det"], Y4.TRACES[a["load"]])
@@ -142,7 +142,7 @@ def generate() -> None:
     for arm in ARMS:
         for s in SEEDS:
             got = Y4.select(arm, sig, budget, pool, order, s, nt_map)
-            ref = np.load(os.path.join(REV9, SOURCES[f"sel_{arm}_s{s}"]))
+            ref = np.load(os.path.join(TEAM, SOURCES[f"sel_{arm}_s{s}"]))
             if not np.array_equal(got, ref) or got.dtype != ref.dtype:
                 sys.exit(f"FAIL  {arm} s{s}: 선별 재현 실패 — 운용점을 잘못 읽었다")
         sel_sha[arm] = sha16(SOURCES[f"sel_{arm}_s1"])
@@ -151,8 +151,8 @@ def generate() -> None:
         assert hist == rec["tile_hist"], (arm, hist, rec["tile_hist"])
 
     # ── 검증 2·3: frames.bin 레코드가 value_score 입력·전역 인덱스와 같다
-    fb = os.path.join(REV9, SOURCES["frames_bin_head"])
-    interim = os.path.join(REV9, "05_데이터셋", "interim")
+    fb = os.path.join(TEAM, SOURCES["frames_bin_head"])
+    interim = os.path.join(TEAM, "05_데이터셋", "interim")
     conf_q8 = np.load(os.path.join(interim, "conf_q8.npy")).astype(np.int64)
     mean_p = np.load(os.path.join(interim, "mean_p.npy")).astype(np.int64)
     kine = np.load(os.path.join(interim, "kinematic_u8.npy")).astype(np.int64)
@@ -186,9 +186,9 @@ def generate() -> None:
         "_schema": "needslack.arm_signals/1",
         "_generated": str(date.today()),
         "_generator": "schema/gen_arm_signals.py",
-        "_warning": "손으로 고치지 말 것. rev.9 를 고치고 생성기를 다시 돌려라.",
+        "_warning": "손으로 고치지 말 것. 팀 연구를 고치고 생성기를 다시 돌려라.",
         "_source": {
-            "repo": "rev.9",
+            "repo": "NeedSlack (팀 연구)",
             "repro_cmd": summ["repro_cmd"],
             "sha256_16": {k: sha16(rel) for k, rel in SOURCES.items()},
         },
@@ -212,7 +212,7 @@ def generate() -> None:
             "frames_bin_vs_interim_mismatch": {
                 k: {"frames": v, "of": int(len(pool)), "rate": round(v / len(pool), 4)}
                 for k, v in mism.items()},
-            "note": "frames.bin 의 conf_q8·det_count 가 rev.9 interim 현재본과 다르다. "
+            "note": "frames.bin 의 conf_q8·det_count 가 팀 연구 interim 현재본과 다르다. "
                     "판정에는 frames.bin(보드 레코드)을 싣는다. w_conf=0 이라 value_score 는 "
                     "불변(자기검증), 축 2 선별은 타일 YOLO 점수라 대조와 무관",
         },

@@ -6,7 +6,7 @@
 
 설계 근거
 -------------------------------------------------------------------------------
-- 원형 12 B 는 rev.9 `02_전처리/s7_export_board.py` 의 `REC_FMT = "<II4B"` 다.
+- 원형 12 B 는 팀 연구 `02_전처리/s7_export_board.py` 의 `REC_FMT = "<II4B"` 다.
   frame_id u32 · timestamp_ms u32 · conf_q8 · mean_p · kinematic_u8 · det_count.
 - 기전 필드(reclaim_mode/granule_k/...)는 `docs/설계결정-0001` §4 의 요구다.
 - 와이어 포맷은 **JSON**. protobuf 가 아니다 — MVP 메시지가 ~122 건이라
@@ -47,7 +47,7 @@ def run_id(arm: str, seed: int) -> str:
 def vin_of(arm: str) -> str:
     """팔 하나를 차량 하나로 모델링한다. **시드는 들어가지 않는다.**
 
-    ★ rev.9 실측: `g = 1.0` 이라 pool 프레임이 전부 채점되고, 따라서
+    ★ 팀 연구 실측: `g = 1.0` 이라 pool 프레임이 전부 채점되고, 따라서
       `y4_select_axis2.select()` 의 무작위 채움 경로(`take < budget`)를 타지 않는다.
       그 결과 **선별 배열이 시드와 무관하게 동일하다** — s1 == s2 == s3 (바이트 동일 확인).
 
@@ -72,7 +72,7 @@ def dataset_id(arm: str) -> str:
 
 
 def selection_filename(arm: str, seed: int = 1, rate: float = 0.10) -> str:
-    """rev.9 선별 배열 파일명. 내용은 정렬된 int64 전역 프레임 인덱스 배열.
+    """팀 연구 선별 배열 파일명. 내용은 정렬된 int64 전역 프레임 인덱스 배열.
 
     세 시드 파일의 내용이 동일하므로 s1 을 정본으로 쓴다(위 vin_of 주석).
     """
@@ -81,7 +81,7 @@ def selection_filename(arm: str, seed: int = 1, rate: float = 0.10) -> str:
 
 # ─────────────────────────────────────────────────────────── 열거형
 class ReclaimMode(str, Enum):
-    PREEMPT_RESUME = "preempt_resume"            # rev.9/07_RTL
+    PREEMPT_RESUME = "preempt_resume"            # NeedSlack/07_RTL
     ADMISSION_NONPREEMPT = "admission_nonpreempt"  # Teammate/slack_reclaim_zybo_v5
     STATIC_RESERVE = "static_reserve"
 
@@ -156,7 +156,7 @@ class Verdict:
     # ── 회수 기전 (설계결정-0001 §4) ──
     reclaim_mode: ReclaimMode
     rtl_build: str
-    #: 선점 입도. rev.9 헤드라인이 k→∞(L_pre≈0) 가정 위에 있어(설계결정-0001 §3-3)
+    #: 선점 입도. 팀 연구 헤드라인이 k→∞(L_pre≈0) 가정 위에 있어(설계결정-0001 §3-3)
     #: 정수로 적을 값이 없다. **None 이 "입도 미지정"의 정식 표현이다.**
     granule_k: Optional[int] = None
     l_pre_cyc: int = 0
