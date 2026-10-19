@@ -35,7 +35,7 @@ rev.9 코드를 **실제로 실행해** 값을 뽑고 JSON 으로 굳힌다. 재
 사용
 -------------------------------------------------------------------------------
     # 생성 — numpy 가 필요하다. rev.9 venv 로 돌린다 (이 프로젝트 .venv 에 numpy 를 넣지 않는다)
-    C:/Users/minch/needslack_venv/Scripts/python schema/gen_arm_signals.py
+    <rev.9 venv>/Scripts/python schema/gen_arm_signals.py
 
     # 점검 — stdlib 만. rev.9 원천 파일의 sha 가 기록과 같은지만 본다. 파일을 쓰지 않는다
     python schema/gen_arm_signals.py --check

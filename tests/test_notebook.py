@@ -26,6 +26,9 @@ def code_cells():
             yield i, "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("!"))
 
 
+# 노트북에는 rev.9(경진대회 팀 연구) 코드가 원문 그대로 실려 공개 저장소에 두지 않는다.
+# `python run.py notebook` 으로 rev.9 가 있는 환경에서 구운 뒤에만 이 검사가 돈다.
+@unittest.skipUnless(os.path.exists(NB), "colab_train.ipynb 없음 — rev.9 가 있는 환경에서 run.py notebook 으로 굽는다")
 class TestNotebook(unittest.TestCase):
     def test_cells_parse(self):
         for i, src in code_cells():

@@ -6,7 +6,7 @@
 
 무엇을 읽는가
 -------------------------------------------------------------------------------
-    00_README.md               현재 위치 한 줄 · "🔴 먼저" 항목 · "🟡 열린 질문"   (상태의 유일한 출처)
+    docs/개발기록.md               현재 위치 한 줄 · "🔴 먼저" 항목 · "🟡 열린 질문"   (상태의 유일한 출처)
     schema/edge_contract.json  계약 상한 (Q_min · L_max · S)
     schema/arm_signals.json    팔별 타일 분포 · rev.9 발견
     edge-agent/replay.py       두 팔을 dry-run 해서 재생 실측을 **지금** 잰다 (약 10초)
@@ -16,7 +16,7 @@
     git log · tests/           최근 커밋 · 테스트 통과 수
     파일 존재                   마일스톤 단계 완료 여부 (산출물이 있으면 완료)
 
-상태를 여기에 적지 않는다 — README 가 유일한 출처다(CLAUDE.md §0). 이 스크립트는
+상태를 여기에 적지 않는다 — README 가 유일한 출처다(docs/작업규칙.md). 이 스크립트는
 README 와 산출물을 **보여 줄** 뿐이다. 렌더링 산출물(*.html)은 커밋하지 않는다.
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ OUT_DEFAULT = os.path.join(ROOT, "docs", "_build", "status.html")
 
 # ─────────────────────────────────────────────────────────── 수집
 def readme() -> tuple[str, str, list[str]]:
-    s = io.open(os.path.join(ROOT, "00_README.md"), encoding="utf-8").read()
+    s = io.open(os.path.join(ROOT, "docs/개발기록.md"), encoding="utf-8").read()
     pos = re.search(r"현재 위치:\s*(.+?)\*\*", s).group(1).strip()
     blk = re.search(r"### 🔴 먼저 — (.+?)\n(.*?)\n### ", s, re.S)
     head, body = blk.group(1).strip(), blk.group(2)
@@ -64,7 +64,7 @@ def readme() -> tuple[str, str, list[str]]:
 
 def open_questions() -> list[str]:
     """README "### 🟡 열린 질문" 의 번호 항목. 없으면 빈 목록."""
-    s = io.open(os.path.join(ROOT, "00_README.md"), encoding="utf-8").read()
+    s = io.open(os.path.join(ROOT, "docs/개발기록.md"), encoding="utf-8").read()
     m = re.search(r"### 🟡 열린 질문.*?\n(.*?)\n(?:### |## |---)", s, re.S)
     if not m:
         return []

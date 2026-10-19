@@ -6,7 +6,7 @@
 
 처음 합류한 사람이 "MQTT 가 뭐고, 왜 두 평면이고, 결국 무엇을 증명하나"를 한 페이지로
 잡게 하는 것이 목적이다. 설명 문장은 여기 있고, 숫자는 전부 아래에서 온다
-(CLAUDE.md §2 — 수치를 손으로 옮기지 않는다).
+(docs/작업규칙.md §2 — 수치를 손으로 옮기지 않는다).
 
     schema/edge_contract.json   링크·수요·S·L_max·Q_min·δ_max·판정 지연 상한
     schema/arm_signals.json     두 팔의 타일 분포 · pool · 예산
@@ -36,7 +36,7 @@ import verdict as V                           # noqa: E402
 from contract import load as load_contract    # noqa: E402
 
 OUT_DEFAULT = os.path.join(ROOT, "docs", "_build", "guide.html")
-#: rev.9 축 2 오프라인 결과 (00_README.md ★ 포지셔닝). JSON 산출물이 없는 유일한 수치
+#: rev.9 축 2 오프라인 결과 (docs/개발기록.md ★ 포지셔닝). JSON 산출물이 없는 유일한 수치
 OFFLINE = {"sta": 0.2989, "dyn": 0.3230, "delta": 0.0241, "ci": (0.0115, 0.0369)}
 
 E = html.escape

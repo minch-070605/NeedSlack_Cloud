@@ -16,7 +16,7 @@
 | **M1~M3** | **전액 $0.** 전부 로컬(Docker) + Colab 무료 GPU |
 | **M4** | AWS **상시 무료 한도 안에서만.** 판정 평면 하나만 올린다 |
 | **금지** | 과금이 발생하는 서비스 도입 — Fargate · Athena/Glue · SageMaker 학습 · Aurora · RDS |
-| **절차** | 유료 서비스가 필요하다고 판단되면 **도입 전에 반드시 묻는다** (`CLAUDE.md §4`) |
+| **절차** | 유료 서비스가 필요하다고 판단되면 **도입 전에 반드시 묻는다** (`docs/작업규칙.md §4`) |
 
 **로컬 우선 원칙**: MinIO=S3 · DynamoDB Local=DynamoDB · PostgreSQL=Aurora ·
 Mosquitto=IoT Core · Colab=SageMaker. 전부 같은 API 를 쓰므로 `endpoint_url` 하나로
@@ -307,7 +307,7 @@ MQTT_HOST=localhost                         # M4 에서 IoT Core 엔드포인트
 
 ```
 needslack-cloud/
-├ CLAUDE.md  00_README.md
+├ README.md  docs/작업규칙.md
 ├ run.py  requirements.txt       ← 단일 진입점(make 대신) · 승인된 의존성
 ├ docs/
 ├ schema/
@@ -348,7 +348,7 @@ needslack-cloud/
 
 ## 8. 의존성 — 확정
 
-`CLAUDE.md §4` 에 따라 승인된 것만 쓴다. 파이썬 의존성은 `requirements.txt` 가 단일
+`docs/작업규칙.md §4` 에 따라 승인된 것만 쓴다. 파이썬 의존성은 `requirements.txt` 가 단일
 소스이고, 이 프로젝트 전용 `.venv` 에 설치한다(rev.9 venv 와 공유하지 않는다).
 
 | # | 항목 | 결정 | 이유 |
@@ -357,7 +357,7 @@ needslack-cloud/
 | 2 | **MQTT 클라이언트** | `paho-mqtt` | 사실상 표준. Mosquitto·IoT Core 양쪽 호환 |
 | 3 | **AWS SDK** | `boto3` | MinIO·DynamoDB Local 이 같은 API. `endpoint_url` 로 전환 |
 | 4 | **PostgreSQL 접근** | `psycopg[binary]` **(ORM 없음)** | 테이블 5개 · 조인 몇 개다. `[binary]` — Windows 에 libpq 가 없다 |
-| 5 | **테스트** | stdlib `unittest` (의존성 없음) | 테스트가 `.venv` 없이도 돌아야 계약 점검(`CLAUDE.md §0-2`)이 항상 가능하다 |
+| 5 | **테스트** | stdlib `unittest` (의존성 없음) | 테스트가 `.venv` 없이도 돌아야 계약 점검(`docs/작업규칙.md §0-2`)이 항상 가능하다 |
 | 6 | **진입점** | `run.py` (stdlib) | Windows 에 `make` 가 없다. `.venv` 재실행 · `.env` 로드 · `PYTHONUTF8=1` 을 한곳에서 처리 |
 
 **웹 프레임워크는 넣지 않는다.** 판정 레코드는 stdlib `dataclass`(`schema/verdict.py`)로

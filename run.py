@@ -29,7 +29,7 @@
                도메인 입문 페이지를 굽는다                   docs/build_guide.py
 
 어느 파이썬으로 불러도 `.venv` 인터프리터로 다시 실행한다. 여기서 막는 함정
-(00_README.md §5 "Windows 함정"):
+(docs/개발기록.md §5 "Windows 함정"):
   - 콘솔 cp949 → 자식 프로세스에 PYTHONUTF8=1, 자신의 stdout 은 UTF-8 로 재설정
   - .env 를 아무도 읽지 않음 → 여기서 읽어 자식 프로세스 환경에 넣는다
   - .ps1 실행 정책 → -ExecutionPolicy Bypass (이 프로세스에만 적용)

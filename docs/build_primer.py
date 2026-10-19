@@ -5,7 +5,7 @@
     python run.py primer m3          # docs/_build/primer-m3.html — 재학습과 판정
 
 `build_guide.py`(전체 입문)와 같은 디자인 토큰을 쓴다 — 스타일은 그 템플릿에서 꺼내 온다.
-숫자는 전부 아래에서 읽는다(CLAUDE.md §2):
+숫자는 전부 아래에서 읽는다(docs/작업규칙.md §2):
 
     m2   PostgreSQL 계보 · MinIO ns-datasets snapshot.json · schema/pg/001_init.sql
     m3   rev.9 runs_yolo/axis2/eval_axis2_mc.json (오프라인 결과 · 시드별 값)

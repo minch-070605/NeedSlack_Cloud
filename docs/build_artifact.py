@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """분석보고서_Edge투Cloud아키텍처.md -> 디자인된 단일 HTML 아티팩트.
 
-같은 파일 경로로 재배포하면 아티팩트 URL 이 유지된다.
-  https://claude.ai/artifact/CccT619ASK9rxZz1hQubsD
+출력은 docs/_build/ 에 쓴다.
 """
 import io, re, html, json, os
 
 import os as _os
 import sys as _sys
 _D = _os.path.dirname(_os.path.abspath(__file__))
-_PUB = r"C:\Users\minch\AppData\Local\Temp\claude\C--Users-minch-Desktop-0718\98d274b1-03d2-406b-bfe2-b40b20b57ec8\scratchpad"
+_PUB = _os.path.join(_D, "_build")
+_os.makedirs(_PUB, exist_ok=True)
 
 # 문서별 설정. 배포 파일 경로가 아티팩트 URL 을 결정하므로 바꾸지 말 것.
 DOCS = {

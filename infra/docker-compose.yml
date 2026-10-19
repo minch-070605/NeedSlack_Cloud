@@ -10,7 +10,7 @@
 # 내리기:  docker compose -f infra/docker-compose.yml down          (데이터 유지)
 #          docker compose -f infra/docker-compose.yml down -v       (데이터 삭제)
 #
-# ⚠️ 이미지는 전부 태그@다이제스트로 고정한다(CLAUDE.md §4 — 이미지도 의존성). 올릴 때는 승인받는다.
+# ⚠️ 이미지는 전부 태그@다이제스트로 고정한다(docs/작업규칙.md §4 — 이미지도 의존성). 올릴 때는 승인받는다.
 # ⚠️ 볼륨은 named volume 을 쓴다. 바인드 마운트는 Windows 에서 권한·성능 문제가 잦다.
 
 name: needslack-cloud
