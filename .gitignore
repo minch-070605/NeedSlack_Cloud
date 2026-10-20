@@ -26,11 +26,8 @@ dynamodb-local/
 *.html
 
 # 공개 저장소에 두지 않는 것
-# - AI 세션 절차 (규칙은 docs/작업규칙.md)
-CLAUDE.md
 # - 경진대회 팀 연구 코드가 원문 그대로 실린다. run.py notebook 으로 굽는다
 pipelines/colab_train.ipynb
 docs/_build/
-.claude/
 .serena/
 .DS_Store
